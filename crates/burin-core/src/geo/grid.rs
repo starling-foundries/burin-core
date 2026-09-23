@@ -197,6 +197,25 @@ impl Grid {
         (row < n && col < n).then_some((base, row, col))
     }
 
+    /// A cell as a closed polygon ring in `(lon, lat)` degrees, counterclockwise (RFC 7946), for
+    /// drawing and for polygon libraries. An equatorial cell is its four corners, since its edges
+    /// are meridians and parallels; a polar cell has `n` points per edge (`n >= 2`). A ring that
+    /// crosses the antimeridian has its western longitudes moved past 180; the cap around a pole
+    /// is closed through the pole along ±180. The commitment never uses it.
+    pub fn cell_polygon(&self, suid: &[u32], n: usize) -> Result<Vec<(f64, f64)>> {
+        let equatorial = Grid::region(suid) == Region::Equatorial;
+        let mut ring = self.cell_ring(suid, if equatorial { 2 } else { n.max(2) })?;
+        ring.reverse();
+        if self.shape(suid) == Shape::Cap {
+            return Ok(cap_polygon(&ring[..ring.len() - 1], suid[0] == 0));
+        }
+        let (lo, hi) = ring.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
+        if hi - lo > 180.0 {
+            ring.iter_mut().filter(|p| p.0 < 0.0).for_each(|p| p.0 += 360.0);
+        }
+        Ok(ring)
+    }
+
     /// `(base, row, col)` of the cell at `level` containing `(lon, lat)` degrees, or `None` if the
     /// point is not finite or projects outside the image.
     pub fn cell_from_lonlat(&self, lon: f64, lat: f64, level: u32) -> Option<(u32, u64, u64)> {
@@ -285,4 +304,28 @@ impl Grid {
         *ring.last_mut().unwrap() = first;
         Ok(ring)
     }
+}
+
+/// The polygon of a cap cell (the one containing a pole) from its open ring of boundary points:
+/// the ring read in longitude order, pinned to ±180 by interpolating across the wrap, and closed
+/// along the pole. North runs east then back along lat 90, south runs west then back along -90,
+/// so both are counterclockwise with the pole inside.
+fn cap_polygon(ring: &[(f64, f64)], north: bool) -> Vec<(f64, f64)> {
+    let mut pts = ring.to_vec();
+    pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (first, last) = (pts[0], pts[pts.len() - 1]);
+    let span = first.0 + 360.0 - last.0;
+    let seam = if span > 0.0 { last.1 + (180.0 - last.0) / span * (first.1 - last.1) } else { last.1 };
+    let pole = if north { 90.0 } else { -90.0 };
+    let mut out = Vec::with_capacity(pts.len() + 5);
+    if north {
+        out.push((-180.0, seam));
+        out.extend(pts);
+        out.extend([(180.0, seam), (180.0, pole), (-180.0, pole), (-180.0, seam)]);
+    } else {
+        out.push((180.0, seam));
+        out.extend(pts.into_iter().rev());
+        out.extend([(-180.0, seam), (-180.0, pole), (180.0, pole), (180.0, seam)]);
+    }
+    out
 }
