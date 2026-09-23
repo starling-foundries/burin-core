@@ -1,4 +1,4 @@
-//! Python binding: `import burin`.
+//! The extension module `burin._burin`; `python/burin` is the package around it.
 
 use burin_core::hierarchy::{cid_to_suid as core_cid_to_suid, suid_to_cid as core_suid_to_cid, Cid};
 use burin_core::index::Index as CoreIndex;
@@ -37,7 +37,7 @@ fn from_json<'py>(py: Python<'py>, v: &Value) -> PyResult<Bound<'py, PyAny>> {
 
 /// The parameters a cell identifier and a root are read against. Integers only; the identity
 /// (`id_hex`) is derived from them and never transmitted.
-#[pyclass(name = "Profile", frozen, skip_from_py_object)]
+#[pyclass(name = "Profile", module = "burin", frozen, skip_from_py_object)]
 #[derive(Clone)]
 pub struct Profile {
     inner: CoreProfile,
@@ -122,7 +122,7 @@ fn profile_or_default(p: Option<&Profile>) -> CoreProfile {
 }
 
 /// An immutable canonical coverage tree: a set of equal-area cells and its 32-byte root.
-#[pyclass(name = "Tree", frozen)]
+#[pyclass(name = "Tree", module = "burin", frozen)]
 pub struct Tree {
     inner: CoreTree,
     profile: CoreProfile,
@@ -275,7 +275,7 @@ impl Tree {
 }
 
 /// A coverage index: register trees under keys, then ask by tree. The catalog-side half.
-#[pyclass(name = "Index")]
+#[pyclass(name = "Index", module = "burin")]
 pub struct Index {
     inner: CoreIndex,
 }
@@ -491,6 +491,7 @@ fn halo_index<'py>(py: Python<'py>, level: u32, width: u32, profile: Option<&Pro
 }
 
 #[pymodule]
+#[pyo3(name = "_burin")]
 fn burin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Profile>()?;
     m.add_class::<Tree>()?;
