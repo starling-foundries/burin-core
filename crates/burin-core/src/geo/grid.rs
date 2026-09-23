@@ -147,6 +147,66 @@ impl Grid {
         self.inverse(x, y, None)
     }
 
+    /// The finest resolution whose cells are at most 1 m² (the reference's `max_resolution`);
+    /// only its cell width is used, to nudge a point lying exactly on a base cell's far edge.
+    fn max_resolution(&self) -> u32 {
+        let r = self.ell.r_a;
+        libm::ceil(libm::log(r * r * (2.0 * PI / 3.0)) / (2.0 * libm::log(self.n_side as f64))) as u32
+    }
+
+    /// `(base, row, col)` of the cell at `level` containing the planar point `(x, y)` (metres), or
+    /// `None` outside the planar image. This is the reference rule (`cell_from_point`): the polar
+    /// squares are open, the equatorial band is closed in y and half-open in x, and inside a base
+    /// cell the row and column are the truncated distances from its upper-left corner, so a point
+    /// on an edge belongs to the cell to its south and east. Each bound is evaluated in the
+    /// reference's order of operations so that edge points agree to the bit.
+    pub fn cell_from_planar(&self, x: f64, y: f64, level: u32) -> Option<(u32, u64, u64)> {
+        let r = self.ell.r_a;
+        let (ns, ss) = (self.north_square as f64, self.south_square as f64);
+        let band = y >= -r * PI / 4.0 && y <= r * PI / 4.0;
+        let base = if y > r * PI / 4.0 && y < r * 3.0 * PI / 4.0 && x > r * (-PI + ns * (PI / 2.0)) && x < r * (-PI / 2.0 + ns * (PI / 2.0)) {
+            0
+        } else if y > -r * 3.0 * PI / 4.0 && y < -r * PI / 4.0 && x > r * (-PI + ss * (PI / 2.0)) && x < r * (-PI / 2.0 + ss * (PI / 2.0)) {
+            5
+        } else if band && x >= -r * PI && x < -r * PI / 2.0 {
+            1
+        } else if band && x >= -r * PI / 2.0 && x < 0.0 {
+            2
+        } else if band && x >= 0.0 && x < r * PI / 2.0 {
+            3
+        } else if band && x >= r * PI / 2.0 && x < r * PI {
+            4
+        } else {
+            return None;
+        };
+        if level == 0 {
+            return Some((base, 0, 0));
+        }
+        let w = self.cell_width(0);
+        let (x0, y0) = self.ul0[base as usize];
+        let (mut dx, mut dy) = ((x - x0).abs() / w, (y - y0).abs() / w);
+        let nudge = 0.5 * self.cell_width(self.max_resolution()) / w;
+        if dx == 1.0 {
+            dx -= nudge;
+        }
+        if dy == 1.0 {
+            dy -= nudge;
+        }
+        let n = (self.n_side as u64).checked_pow(level)?;
+        let (row, col) = ((dy * n as f64) as u64, (dx * n as f64) as u64);
+        (row < n && col < n).then_some((base, row, col))
+    }
+
+    /// `(base, row, col)` of the cell at `level` containing `(lon, lat)` degrees, or `None` if the
+    /// point is not finite or projects outside the image.
+    pub fn cell_from_lonlat(&self, lon: f64, lat: f64, level: u32) -> Option<(u32, u64, u64)> {
+        if !(lon.is_finite() && lat.is_finite()) {
+            return None;
+        }
+        let (x, y) = self.forward(lon, lat, None);
+        self.cell_from_planar(x, y, level)
+    }
+
     /// The `4n - 4 = 8` boundary points of `Cell.boundary(n=3, plane=False)`, `(lon, lat)`
     /// degrees, as a set (the reference's clockwise start point is not reproduced).
     pub fn boundary3(&self, suid: &[u32]) -> Result<Vec<(f64, f64)>> {

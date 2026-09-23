@@ -475,6 +475,50 @@ def gen_topology():
     dump("topology.json", {"neighbours": neighbours, "scanline": scanline})
 
 
+# ----------------------------------------------------------------------------- 8. points
+def _bits(x) -> str:
+    return struct.pack(">d", float(x)).hex()
+
+
+def gen_points(name: str, p):
+    """The cell containing a point, as the reference decides it. Planar points sit exactly on
+    cell edges and vertices (and at cell centres) so the tie-break is pinned to the bit; the
+    ellipsoidal points also record the forward projection. Floats are stored as IEEE-754 bits."""
+    import numpy as np
+    d = dggs_for(p)
+    rng = random.Random(20260924)
+    w0 = float(d.cell_width(0))
+    planar = []
+    for level in (0, 1, 2, 5):
+        n = 3**level
+        for b in LETTERS:
+            ulx, uly = (float(v) for v in d.ul_vertex[b])
+            for i in sorted({0, 1, n // 2, n - 1, n}):
+                for j in sorted({0, 1, n // 2, n - 1, n}):
+                    for oi, oj in ((0.0, 0.0), (0.5, 0.5)):
+                        planar.append((ulx + (i + oi) * (w0 / n), uly - (j + oj) * (w0 / n), level))
+    planar += [(1e8, 0.0, 3), (0.0, 1e8, 3), (-3.1e7, 0.0, 3)]
+    xs, ys = np.array([q[0] for q in planar]), np.array([q[1] for q in planar])
+    planar_rows = []
+    for level in sorted({q[2] for q in planar}):
+        idx = [k for k, q in enumerate(planar) if q[2] == level]
+        got = d.cells_from_points(xs[idx], ys[idx], level, plane=True)
+        planar_rows += [[_bits(xs[k]), _bits(ys[k]), level, str(c)] for k, c in zip(idx, got)]
+    lon0 = p["lon_0"]
+    pts = [(rng.uniform(-180, 180), float(np.degrees(np.arcsin(rng.uniform(-1, 1))))) for _ in range(160)]
+    pts += [(lon, lat) for lat in (90.0, -90.0) for lon in (0.0, lon0, lon0 - 180.0)]
+    pts += [(((lon0 + 90 * k + 180) % 360) - 180, 0.0) for k in range(4)]
+    pts += [(lon, lat) for lon in (180.0, -180.0) for lat in (0.0, 30.0, -60.0)]
+    pts += [(lon0 + 10.0, lat) for lat in (41.8, 41.9, -41.8, -41.9)]
+    lon = np.array([q[0] for q in pts]); lat = np.array([q[1] for q in pts])
+    x, y = d.rhealpix(lon, lat)
+    lonlat_rows = []
+    for level in (0, 1, 4, 8, 12, 15):
+        got = d.cells_from_points(lon, lat, level, plane=False)
+        lonlat_rows += [[_bits(lon[k]), _bits(lat[k]), level, str(got[k]), _bits(x[k]), _bits(y[k])] for k in range(len(pts))]
+    dump(f"points_{name}.json", {"profile": p, "planar": planar_rows, "lonlat": lonlat_rows})
+
+
 if __name__ == "__main__":
     which = set(sys.argv[1:]) or {"all"}
     if which & {"all", "geo"}:
@@ -491,3 +535,6 @@ if __name__ == "__main__":
         gen_profile_ids()
     if which & {"all", "topology"}:
         gen_topology()
+    if which & {"all", "points"}:
+        for name, p in PROFILES.items():
+            gen_points(name, p)

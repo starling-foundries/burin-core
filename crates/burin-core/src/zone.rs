@@ -88,6 +88,16 @@ pub fn position(h: &Hierarchy, cid: Cid) -> Result<Position> {
     Ok(Position { base: path[0], level: (path.len() - 1) as u32, row, col })
 }
 
+/// The cid of the cell at `level` containing `(lon, lat)` degrees, by the reference rule
+/// (`Grid::cell_from_planar`). Non-finite coordinates, or a point outside the image, are an error.
+pub fn cell_from_point(profile: &Profile, lon: f64, lat: f64, level: u32) -> Result<Cid> {
+    profile.validate()?;
+    match profile.grid().cell_from_lonlat(lon, lat, level) {
+        Some((b, r, c)) => cell_at(&profile.hierarchy(), b, level, r, c),
+        None => invalid(format!("({lon}, {lat}) is not a point of the grid")),
+    }
+}
+
 /// The cid at `(row, col)` of base cell `base` at `level`.
 pub fn cell_at(h: &Hierarchy, base: u32, level: u32, row: u64, col: u64) -> Result<Cid> {
     let n = side(h)?;

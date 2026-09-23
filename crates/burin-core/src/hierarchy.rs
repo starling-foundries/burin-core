@@ -74,6 +74,15 @@ impl Hierarchy {
         Ok(digits)
     }
 
+    /// The ancestor of `cid` at `level` (itself at its own level).
+    pub fn ancestor(&self, cid: Cid, level: u32) -> Result<Cid> {
+        let r = self.check(cid, None)?;
+        if level > r {
+            return invalid(format!("cid {cid} is at level {r}, above level {level}"));
+        }
+        Ok(cid / (self.a as u64).pow(r - level))
+    }
+
     pub fn parent(&self, cid: Cid) -> Option<Cid> {
         if self.level(cid) == 0 {
             None
