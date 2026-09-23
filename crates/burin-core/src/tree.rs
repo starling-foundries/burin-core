@@ -98,13 +98,41 @@ impl Tree {
         Ok(Tree { h, d, bases: vec![Node::Empty; h.b as usize], ctx })
     }
 
-    /// Cover every cid (any levels up to `d`, any order, duplicates allowed).
+    /// Cover every cid (any levels up to `d`, any order, duplicates allowed). Built in one pass:
+    /// each cell becomes its range of leaves, the ranges are merged, and the canonical tree is
+    /// read off them top-down, so each node is hashed once.
     pub fn from_cells(h: Hierarchy, d: u32, cids: impl IntoIterator<Item = Cid>, ctx: Arc<Ctx>) -> Result<Tree> {
-        let mut t = Tree::empty(h, d, ctx)?;
+        let empty = Tree::empty(h, d, ctx)?;
+        let a = h.a as u64;
+        let mut spans = Vec::new();
         for c in cids {
-            t = t.set_full(c)?;
+            let r = h.check(c, Some(d))?;
+            let width = a.pow(d - r);
+            spans.push((c * width, (c + 1) * width));
         }
-        Ok(t)
+        spans.sort_unstable();
+        let mut merged: Vec<(u64, u64)> = Vec::with_capacity(spans.len());
+        for (lo, hi) in spans {
+            match merged.last_mut() {
+                Some(last) if lo <= last.1 => last.1 = last.1.max(hi),
+                _ => merged.push((lo, hi)),
+            }
+        }
+        fn build(lo: u64, hi: u64, above: u32, spans: &[(u64, u64)], a: u64, ctx: &Ctx) -> Node {
+            let spans = &spans[spans.partition_point(|s| s.1 <= lo)..];
+            let spans = &spans[..spans.partition_point(|s| s.0 < hi)];
+            match spans.first() {
+                None => return Node::Empty,
+                Some(&(s, e)) if s <= lo && e >= hi => return Node::Full,
+                _ => {}
+            }
+            let step = (hi - lo) / a;
+            let children = (0..a).map(|k| build(lo + k * step, lo + (k + 1) * step, above - 1, spans, a, ctx)).collect();
+            make_branch(children, above, ctx)
+        }
+        let span = a.pow(d);
+        let bases = (0..h.b as u64).map(|b| build((a + b) * span, (a + b + 1) * span, d, &merged, a, &empty.ctx)).collect();
+        Ok(Tree { bases, ..empty })
     }
 
     fn set_rec(&self, node: &Node, digits: &[u32], d: u32) -> Node {

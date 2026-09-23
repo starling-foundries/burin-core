@@ -215,3 +215,27 @@ fn hierarchy_round_trips() {
     assert!(SPACE.check(5, None).is_err());
     assert!(SPACE.check(15 * 9, None).is_err(), "base 15-9=6 is out of range");
 }
+
+#[test]
+fn bulk_build_equals_cell_by_cell_insertion() {
+    let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+    for d in [0u32, 1, 3, 5] {
+        for n in [0usize, 1, 7, 60, 400] {
+            let mut cells = random_cells(&mut rng, &SPACE, d, n);
+            if n > 1 {
+                cells.push(cells[0]); // duplicates
+                cells.push(SPACE.parent(cells[1]).unwrap_or(cells[1])); // an ancestor of a listed cell
+            }
+            let bulk = Tree::from_cells(SPACE, d, cells.clone(), ctx(d)).unwrap();
+            let mut one = Tree::empty(SPACE, d, ctx(d)).unwrap();
+            for &c in &cells {
+                one = one.set_full(c).unwrap();
+            }
+            assert_eq!(bulk.root(), one.root(), "d={d} n={n}");
+            assert_eq!(bulk.cells(), one.cells(), "d={d} n={n}: canonical form");
+        }
+    }
+    let planet: Vec<Cid> = (0..6).map(|b| SPACE.cid(&[b]).unwrap()).collect();
+    assert!(Tree::from_cells(SPACE, 4, planet, ctx(4)).unwrap().is_full());
+    assert!(Tree::from_cells(SPACE, 2, [SPACE.cid(&[0, 0, 0, 0]).unwrap()], ctx(2)).is_err(), "a cell below the depth");
+}
