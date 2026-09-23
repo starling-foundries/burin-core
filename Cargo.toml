@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/burin-core", "crates/burin-py"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/starling-foundries/burin-core"
+authors = ["Cameron Sajedi <cameronsajedi@gmail.com>"]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

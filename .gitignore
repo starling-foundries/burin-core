@@ -1,0 +1,9 @@
+/target
+**/target
+.venv
+__pycache__/
+*.pyc
+*.so
+dist/
+.pytest_cache/
+dist-linux/

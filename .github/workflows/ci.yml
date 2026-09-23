@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+          targets: wasm32-unknown-unknown
+      - run: cargo test -p burin-core
+      - run: cargo clippy -p burin-core -- -D warnings
+      - run: cargo check -p burin-core --target wasm32-unknown-unknown
+
+  python:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v6
+      - run: uv venv && uv pip install maturin pytest
+      - run: uv run maturin develop --release
+      - run: uv run pytest
+
+  fixtures:
+    # the committed fixtures must be exactly what the reference implementation produces
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --with rhealpixdggs==0.8.6 --with shapely python tools/gen_fixtures.py
+      - run: git diff --exit-code -- crates/burin-core/tests/fixtures
