@@ -40,6 +40,20 @@ bc.Tree.from_geojson(aoi, 6).raster()              # uint8 bytes, shape (6, 3**6
 t.to_dggs_json(bc.suid_to_cid("Q"))                 # OGC DGGS-JSON zone data; bc.Tree.from_dggs_json reads it back
 ```
 
+Arrays in, arrays out, spread over threads (`nthreads=0` uses them all):
+
+```python
+import numpy as np
+
+cells = bc.cells_from_lonlat(lon, lat, level=9)     # uint64, the shape of lon/lat (SPEC §8 "Points")
+lon_c, lat_c = bc.cells_to_lonlat(cells)            # each cell's nucleus
+coords, offsets = bc.cell_boundaries(cells)         # ragged rings: cell i is coords[offsets[i]:offsets[i+1]]
+bc.cell_neighbours(cells)                           # (..., 4): up, right, down, left
+bc.zoom_to(cells, 9, 7)                             # ancestors; to a finer level, (..., 9**k) descendants
+bc.full_domain(3)                                   # every cell at a level: cids fill [9**(r+1), 15*9**r)
+bc.Tree.from_cells(cells, 9).root_hex               # the fingerprint of any set of cells
+```
+
 ## Rust
 
 ```rust

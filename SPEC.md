@@ -146,6 +146,22 @@ counterclockwise. Every cell has four neighbours. Conformance: rhealpixdggs-py
 sixteen polar placements (`topology.json`), and DGGAL's zone neighbours for every zone at levels
 0–2 (`dggal_rhealpix.json`).
 
+**Points.** The cell at level r containing a point is found in the plane: project the point
+(the forward projection of §6), take the base cell whose square contains it, and read the row and
+column off the truncated distances from that square's upper-left corner,
+`row = ⌊|y − y0| / w0 · N^r⌋`, `col = ⌊|x − x0| / w0 · N^r⌋`. The polar squares are open, the
+equatorial band is closed in y and half-open in x (`x0 ≤ x < x0 + w0`), and a point on an edge
+between two cells therefore belongs to the one to its south or east; a distance of exactly `w0`
+is nudged in by half a cell width at the reference's finest resolution. Conformance:
+`points_*.json`, exact on planar points placed on every kind of edge and vertex, and on
+ellipsoidal points more than a micrometre from an edge.
+
+**Polygons.** For drawing and for polygon libraries a cell is a closed counterclockwise ring in
+`(lon, lat)`: the four corners of an equatorial cell, whose edges are meridians and parallels;
+`n` points per edge of a polar cell; western longitudes moved past 180 on a ring that crosses the
+antimeridian; and the cap around each pole closed through the pole along ±180. No root depends on
+it.
+
 **Rasters and halos.** A raster at level r is one n×n array per base cell, flattened base-major
 then scanline: `index = base·n² + row·n + col`; any per-cell value array moves between cids and
 this layout by that index alone. A halo of width `w ≤ n` pads each array to
