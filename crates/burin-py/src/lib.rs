@@ -15,6 +15,8 @@ use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::Value;
 use std::sync::Arc;
 
+mod vector;
+
 fn err(e: burin_core::Error) -> PyErr {
     PyValueError::new_err(e.to_string())
 }
@@ -28,6 +30,17 @@ fn to_json(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
         json.call_method1("dumps", (obj,))?.extract()?
     };
     serde_json::from_str(&s).map_err(|e| PyValueError::new_err(format!("not JSON: {e}")))
+}
+
+/// Cell ids from a uint64 numpy array (read directly) or any sequence of ints.
+fn cid_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
+    use numpy::PyArrayMethods;
+    if let Ok(a) = obj.cast::<numpy::PyArray1<u64>>() {
+        if let Ok(v) = a.to_vec() {
+            return Ok(v);
+        }
+    }
+    obj.extract()
 }
 
 fn from_json<'py>(py: Python<'py>, v: &Value) -> PyResult<Bound<'py, PyAny>> {
@@ -133,7 +146,8 @@ impl Tree {
     /// Cover every cid (any levels up to `depth`, any order, duplicates allowed).
     #[staticmethod]
     #[pyo3(signature = (cids, depth, profile=None))]
-    fn from_cells(cids: Vec<u64>, depth: u32, profile: Option<&Profile>) -> PyResult<Tree> {
+    fn from_cells(cids: &Bound<'_, PyAny>, depth: u32, profile: Option<&Profile>) -> PyResult<Tree> {
+        let cids = cid_list(cids)?;
         let p = profile_or_default(profile);
         let ctx = Arc::new(p.ctx(depth).map_err(err)?);
         let inner = CoreTree::from_cells(p.hierarchy(), depth, cids, ctx).map_err(err)?;
@@ -369,9 +383,10 @@ fn cell_area_m2(level: u32, profile: Option<&Profile>) -> f64 {
     profile_or_default(profile).area_m2(level)
 }
 
-/// GeoJSON FeatureCollection of cell polygons for display (`n` points per edge; polar cells
-/// benefit from `n=5`). Properties: `cid`, `suid`, `level`; feature `id` is the cid as a string.
-/// Rings that cross the antimeridian are shifted east of 180° so tile maps draw them whole.
+/// GeoJSON FeatureCollection of cell polygons for display: counterclockwise rings, `n` points
+/// per edge on polar cells (equatorial cells are their four corners), rings that cross the
+/// antimeridian shifted east of 180° so tile maps draw them whole, and each polar cap closed
+/// through its pole. Properties: `cid`, `suid`, `level`; feature `id` is the cid as a string.
 #[pyfunction]
 #[pyo3(signature = (cids, profile=None, n=3))]
 fn cells_geojson<'py>(py: Python<'py>, cids: Vec<u64>, profile: Option<&Profile>, n: usize) -> PyResult<Bound<'py, PyAny>> {
@@ -381,15 +396,7 @@ fn cells_geojson<'py>(py: Python<'py>, cids: Vec<u64>, profile: Option<&Profile>
     let mut features = Vec::with_capacity(cids.len());
     for cid in cids {
         let path = h.path(cid).map_err(err)?;
-        let mut ring = grid.cell_ring(&path, n).map_err(err)?;
-        let (lo, hi) = ring.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
-        if hi - lo > 180.0 {
-            for pt in ring.iter_mut() {
-                if pt.0 < 0.0 {
-                    pt.0 += 360.0;
-                }
-            }
-        }
+        let ring = grid.cell_polygon(&path, n).map_err(err)?;
         let coords: Vec<[f64; 2]> = ring.iter().map(|&(x, y)| [x, y]).collect();
         features.push(serde_json::json!({
             "type": "Feature", "id": cid.to_string(),
@@ -511,6 +518,10 @@ fn burin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(subzones, m)?)?;
     m.add_function(wrap_pyfunction!(neighbours, m)?)?;
     m.add_function(wrap_pyfunction!(halo_index, m)?)?;
+    m.add_function(wrap_pyfunction!(vector::cells_from_lonlat, m)?)?;
+    m.add_function(wrap_pyfunction!(vector::cells_to_lonlat, m)?)?;
+    m.add_function(wrap_pyfunction!(vector::cell_boundaries, m)?)?;
+    m.add_function(wrap_pyfunction!(vector::cell_neighbours, m)?)?;
     m.add_function(wrap_pyfunction!(raster_index, m)?)?;
     m.add_function(wrap_pyfunction!(raster_cells, m)?)?;
     m.add("OGC_RHEALPIX", Profile::ogc())?;

@@ -4,3 +4,4 @@ The compiled core is ``burin._burin``; everything public is re-exported here.
 """
 from ._burin import *  # noqa: F401,F403
 from ._burin import __version__  # noqa: F401
+from ._vector import *  # noqa: F401,F403
