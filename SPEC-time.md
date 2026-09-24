@@ -11,8 +11,9 @@ unchanged.
 
 ## 9. The time line
 
-**Scale.** Instants are POSIX time: microseconds since 1970-01-01T00:00:00Z, leap seconds not
-counted. A leap second (`23:59:60`) has no POSIX instant and is refused, as is any calendar
+**Scale.** Instants are POSIX time, the OGC-registered temporal CRS
+`https://www.opengis.net/def/crs/OGC/0/UnixTime`, counted in microseconds since
+1970-01-01T00:00:00Z, leap seconds not counted. A leap second (`23:59:60`) has no POSIX instant and is refused, as is any calendar
 without real instants (CF `noleap`, `360_day` and similar).
 
 **Ticks.** Under a profile (§1), an instant `t` falls in the tick
@@ -171,6 +172,10 @@ DGGS-JSON (§7) carries time as one entry of `dimensions`:
 "dimensions": [{"name": "time", "interval": ["2020-01-01", "2020-04-30"],
                 "grid": {"cellsCount": 4, "firstCoordinate": "2020-01-01", "resolution": "P1M"}}]
 ```
+
+A writer sets the dimension's `definition` to `https://www.opengis.net/def/crs/OGC/0/UnixTime`.
+A reader refuses any other `definition`; when the field is absent, the instants are read as
+POSIX time.
 
 The data array is ordered sub-zone major (OGC API - DGGS, clause 16), so the value for sub-zone
 `z` at step `i` is `data[z · T + i]`, with `T = cellsCount`. This is the space-major order of
