@@ -82,3 +82,4 @@ cd fuzz && cargo +nightly fuzz run opening_record corpus/opening_record seeds/op
 ```
 
 Which outputs are frozen and how versions move are in [STABILITY.md](STABILITY.md); what changed is in [CHANGELOG.md](CHANGELOG.md).
+Time and space-time are drafted in [SPEC-time.md](SPEC-time.md) (not yet implemented).
