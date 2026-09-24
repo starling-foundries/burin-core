@@ -1,13 +1,16 @@
-//! Point → cell against rhealpixdggs-py (`points_*.json`): exact on planar edge and vertex
-//! points, and on ellipsoidal points away from cell edges; the forward projection to a stated
-//! tolerance; and every cell's nucleus lies in that cell.
+//! Point → cell against rhealpixdggs-py (`points_*.json`), exactly: planar points on every kind of
+//! edge and vertex; ellipsoidal points and the forward projection, where each difference from the
+//! reference is listed in `reference_disagreements.json` to the ulp; and every nucleus lies in its cell.
 
-use burin_core::hierarchy::{cid_to_suid, suid_to_cid, SPACE};
+use burin_core::hierarchy::{cid_to_suid, SPACE};
 use burin_core::profile::Profile;
-use burin_core::zone::{cell_at, cell_from_point, neighbours};
+use burin_core::zone::{cell_at, cell_from_point};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+
+mod support;
+use support::goldens::ulps;
 
 fn fixture(name: &str) -> Value {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
@@ -29,8 +32,6 @@ fn profile_of(fx: &Value) -> Profile {
 }
 
 const PROFILES: [&str; 3] = ["ogc", "burin1", "ns1ss2"];
-/// Random points per level in the fixture (`gen_points` in tools/gen_fixtures.py).
-const RANDOM: usize = 160;
 
 #[test]
 fn planar_points_match_the_reference_to_the_bit() {
@@ -49,41 +50,42 @@ fn planar_points_match_the_reference_to_the_bit() {
 }
 
 #[test]
-fn ellipsoidal_points_match_the_reference() {
+fn ellipsoidal_points_match_the_reference_exactly_or_as_listed() {
+    let listed_all = fixture("reference_disagreements.json");
     for name in PROFILES {
         let fx = fixture(&format!("points_{name}.json"));
         let profile = profile_of(&fx);
         let grid = profile.grid();
-        let (mut exact_xy, mut worst, mut near_edge) = (0usize, 0f64, 0usize);
-        let rows = fx["lonlat"].as_array().unwrap();
-        // rows run level by level over the same points; the first RANDOM of each block are random,
-        // the rest are placed on edges, poles and seams on purpose
-        let levels: BTreeSet<u64> = rows.iter().map(|r| r[2].as_u64().unwrap()).collect();
-        let per_level = rows.len() / levels.len();
-        for (i, row) in rows.iter().enumerate() {
-            let random = i % per_level < RANDOM;
+        let listed = &listed_all[name];
+        let key = |r: &Value, n: usize| r.as_array().unwrap()[..n].iter().map(|v| v.to_string()).collect::<Vec<_>>().join("|");
+        let lookups: BTreeMap<String, String> = listed["lookups"].as_array().unwrap().iter().map(|r| (key(r, 3), r[4].as_str().unwrap().to_string())).collect();
+        let forward: BTreeMap<String, (u64, u64)> = listed["forward"].as_array().unwrap().iter().map(|r| (key(r, 2), (r[2].as_u64().unwrap(), r[3].as_u64().unwrap()))).collect();
+        let (mut seen_lookups, mut seen_forward) = (BTreeSet::new(), BTreeSet::new());
+        for row in fx["lonlat"].as_array().unwrap() {
             let (lon, lat, level) = (bits(&row[0]), bits(&row[1]), row[2].as_u64().unwrap() as u32);
-            let (rx, ry) = (bits(&row[4]), bits(&row[5]));
-            let (x, y) = grid.forward(lon, lat, None);
-            exact_xy += usize::from(x == rx && y == ry);
-            worst = worst.max((x - rx).abs().max((y - ry).abs()) / rx.abs().max(ry.abs()).max(1.0));
-            let want = suid_to_cid(row[3].as_str().unwrap()).unwrap();
-            let got = cell_from_point(&profile, lon, lat, level).unwrap();
-            let path = SPACE.path(want).unwrap();
-            let (ulx, uly) = grid.ul_vertex(&path);
-            let w = grid.cell_width(level);
-            let clearance = (rx - ulx).min(ulx + w - rx).min(uly - ry).min(ry - (uly - w));
-            if clearance > 1e-6 {
-                assert_eq!(got, want, "{name}: ({lon}, {lat}) at level {level}, {clearance:.3e} m inside");
-            } else {
-                near_edge += usize::from(random);
-                assert!(got == want || neighbours(&profile, want).unwrap().contains(&got), "{name}: ({lon}, {lat}) at level {level}");
+            let want = row[3].as_str().unwrap();
+            let got = cid_to_suid(cell_from_point(&profile, lon, lat, level).unwrap()).unwrap();
+            match lookups.get(&key(row, 3)) {
+                Some(listed_got) => {
+                    assert_eq!(&got, listed_got, "{name}: ({lon}, {lat}) at level {level} is listed as {listed_got}");
+                    seen_lookups.insert(key(row, 3));
+                }
+                None => assert_eq!(got, want, "{name}: ({lon}, {lat}) at level {level} differs from the reference and is not listed"),
+            }
+            if level == 0 {
+                let (x, y) = grid.forward(lon, lat, None);
+                let d = (ulps(x, bits(&row[4])), ulps(y, bits(&row[5])));
+                match forward.get(&key(row, 2)) {
+                    Some(&expected) => {
+                        assert_eq!(d, expected, "{name}: forward({lon}, {lat}) differs by {d:?} ulps, listed as {expected:?}");
+                        seen_forward.insert(key(row, 2));
+                    }
+                    None => assert_eq!(d, (0, 0), "{name}: forward({lon}, {lat}) differs from the reference and is not listed"),
+                }
             }
         }
-        assert!(worst <= 1e-14, "{name}: forward projection differs by {worst:e} relative");
-        assert!(exact_xy * 10 >= rows.len() * 9, "{name}: only {exact_xy}/{} forward projections are bit-identical", rows.len());
-        eprintln!("{name}: forward bit-identical {exact_xy}/{}, worst relative {worst:e}; random points within 1 µm of an edge: {near_edge}", rows.len());
-        assert!(near_edge * 100 <= rows.len(), "{name}: {near_edge} random points too near an edge to compare exactly");
+        assert_eq!(seen_lookups.len(), lookups.len(), "{name}: a listed lookup is no longer in the fixture or no longer differs");
+        assert_eq!(seen_forward.len(), forward.len(), "{name}: a listed projection is no longer in the fixture or no longer differs");
     }
 }
 

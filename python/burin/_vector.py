@@ -172,6 +172,9 @@ def cell_boundaries(cell_ids, *, n: int = 5, profile=None, nthreads: int = 0) ->
     edge; a ring crossing the antimeridian has its western longitudes moved past 180; the cap
     around each pole is closed through the pole along ±180.
 
+    Polygons are for drawing: a point on or very near an edge may fall outside the polygon of the
+    cell it belongs to. Decide membership with :func:`cells_from_lonlat`, never with a polygon.
+
     Returns
     -------
     coords : numpy.ndarray of float64, shape (M, 2)

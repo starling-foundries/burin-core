@@ -6,7 +6,12 @@ on:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    # the determinism goldens (tests/determinism.rs) are exact, so every platform must agree to the bit
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -14,14 +19,17 @@ jobs:
           components: clippy
           targets: wasm32-unknown-unknown
       - run: cargo test -p burin-core
-      - run: cargo clippy -p burin-core -p burin-py --all-targets -- -D warnings
-      - run: cargo check -p burin-core --target wasm32-unknown-unknown
+      - run: cargo test -p burin-core --release
+      - if: matrix.os == 'ubuntu-latest'
+        run: cargo clippy -p burin-core -p burin-py --all-targets -- -D warnings
+      - if: matrix.os == 'ubuntu-latest'
+        run: cargo check -p burin-core --target wasm32-unknown-unknown
 
   python:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

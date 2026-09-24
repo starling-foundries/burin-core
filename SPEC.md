@@ -59,7 +59,21 @@ Set operations combine two trees of the same profile and depth by node-local rul
 
 ## 6. Numerics that must be reproduced
 
-The projection is the rHEALPix projection of the WGS84 authalic sphere as in rhealpixdggs-py 0.8.6, including: the authalic-latitude series (arXiv 2212.05818 A19/A20) with its evaluation order; the polar cap clamp; the pole convention `lon = −π`; the polar-triangle tie-breaks with ε = 10⁻¹⁵ and their north/south comparison senses; `lon_0` applied as a degree shift outside the projection with wrap to `[−180, 180)`. The fixtures pin every one of these; a conforming implementation reproduces `cells_*.json` to 10⁻¹² in degrees and `polyfill_*.json` exactly.
+The projection is the rHEALPix projection of the WGS84 authalic sphere as in rhealpixdggs-py 0.8.6, including: the authalic-latitude series (arXiv 2212.05818 A19/A20) with its evaluation order; the polar cap clamp; the pole convention `lon = −π`; the polar-triangle tie-breaks with ε = 10⁻¹⁵ and their north/south comparison senses; `lon_0` applied as a degree shift outside the projection with wrap to `[−180, 180)`. The fixtures pin every one of these.
+
+**The answer is defined to the bit.** Where a result is a float, the defining evaluation is this
+crate's: IEEE-754 binary64 arithmetic in the order written, with no fused multiply-add, and every
+transcendental function from the `libm` crate (a port of musl's libm), never the platform's. That
+evaluation gives the same bits on every target, and `points_burin.json` freezes it: the cell of
+every adversarial point at every level (points on cell corners and edges, the seams between base
+cells, the band edge and the poles, each with its one-ulp neighbours), the forward projection, and
+the nuclei. A conforming implementation reproduces that file exactly, and CI checks it on Linux
+(x86_64 and aarch64), macOS (Intel and Apple silicon) and Windows. The reference implementation
+evaluates with numpy and the platform's math library, so it is not itself bit-stable across
+machines; where it differs from this crate on the committed fixtures, `reference_disagreements.json`
+lists the difference exactly (no point lookup differs; two forward projections and about fifty of
+2,200 nuclei per profile differ by one or two ulps in latitude), and the parity tests require every
+other value to match bit for bit. `polyfill_*.json` is reproduced exactly.
 
 ## 7. Correspondence with OGC API - DGGS
 
@@ -152,15 +166,19 @@ column off the truncated distances from that square's upper-left corner,
 `row = ⌊|y − y0| / w0 · N^r⌋`, `col = ⌊|x − x0| / w0 · N^r⌋`. The polar squares are open, the
 equatorial band is closed in y and half-open in x (`x0 ≤ x < x0 + w0`), and a point on an edge
 between two cells therefore belongs to the one to its south or east; a distance of exactly `w0`
-is nudged in by half a cell width at the reference's finest resolution. Conformance:
+is nudged in by half a cell width at the reference's finest resolution. This rule alone decides
+which cell a point belongs to. Conformance:
 `points_*.json`, exact on planar points placed on every kind of edge and vertex, and on
 ellipsoidal points more than a micrometre from an edge.
 
 **Polygons.** For drawing and for polygon libraries a cell is a closed counterclockwise ring in
 `(lon, lat)`: the four corners of an equatorial cell, whose edges are meridians and parallels;
 `n` points per edge of a polar cell; western longitudes moved past 180 on a ring that crosses the
-antimeridian; and the cap around each pole closed through the pole along ±180. No root depends on
-it.
+antimeridian; and the cap around each pole closed through the pole along ±180. Polygons are
+drawings, not definitions: their vertices come from the inverse projection and their polar edges
+are chords of curves, so a point on or very near an edge may fall on the other side of a polygon
+from the cell the point rule gives it. Membership is always the point rule's; no root depends on a
+polygon.
 
 **Rasters and halos.** A raster at level r is one n×n array per base cell, flattened base-major
 then scanline: `index = base·n² + row·n + col`; any per-cell value array moves between cids and

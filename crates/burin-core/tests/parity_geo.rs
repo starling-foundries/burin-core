@@ -6,6 +6,8 @@ use burin_core::geo::rhealpix::*;
 use burin_core::geo::{Ellipsoid, Grid, Region, Shape};
 use burin_core::hierarchy::suid_to_path;
 use serde_json::Value;
+
+mod support;
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> Value {
@@ -26,15 +28,6 @@ fn close(a: f64, b: f64, rel: f64, what: &str) {
     }
     let scale = a.abs().max(b.abs()).max(1.0);
     let err = (a - b).abs() / scale;
-    assert!(err <= rel, "{what}: {a:?} vs {b:?} (rel {err:.3e} > {rel:.1e})");
-}
-
-/// Strict relative closeness for planar metres.
-fn close_rel(a: f64, b: f64, rel: f64, what: &str) {
-    if a == b {
-        return;
-    }
-    let err = (a - b).abs() / a.abs().max(b.abs());
     assert!(err <= rel, "{what}: {a:?} vs {b:?} (rel {err:.3e} > {rel:.1e})");
 }
 
@@ -129,28 +122,53 @@ fn grid_for(p: &Value) -> Grid {
     Grid::new(Ellipsoid::wgs84(), g(p, "lon_0"), p["ns"].as_i64().unwrap() as i32, p["ss"].as_i64().unwrap() as i32, 3)
 }
 
+/// The nuclei whose bits differ from the reference, with the distance in ulps of lon and lat
+/// (`reference_disagreements.json`, from `examples/freeze_points.rs`).
+fn listed_nuclei(name: &str) -> std::collections::BTreeMap<String, (u64, u64)> {
+    fixture("reference_disagreements.json")[name]["nuclei"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| (r[0].as_str().unwrap().to_string(), (r[1].as_u64().unwrap(), r[2].as_u64().unwrap())))
+        .collect()
+}
+
+/// Exact, unless the nucleus is listed; then exactly the listed distance.
+fn nucleus_parity(listed: &std::collections::BTreeMap<String, (u64, u64)>, seen: &mut std::collections::BTreeSet<String>, suid: &str, got: (f64, f64), want: (f64, f64)) {
+    let d = (support::goldens::ulps(got.0, want.0), support::goldens::ulps(got.1, want.1));
+    match listed.get(suid) {
+        Some(&expected) => {
+            assert_eq!(d, expected, "{suid}: nucleus differs from the reference by {d:?} ulps, listed as {expected:?}");
+            seen.insert(suid.to_string());
+        }
+        None => assert_eq!(d, (0, 0), "{suid}: nucleus {got:?} is not the reference's {want:?} and is not listed"),
+    }
+}
+
 fn cells_parity(name: &str) {
     let fx = fixture(&format!("cells_{name}.json"));
     let grid = grid_for(&fx["profile"]);
+    let listed = listed_nuclei(name);
+    let mut seen = std::collections::BTreeSet::new();
     for (r, w) in fx["cell_width"].as_array().unwrap().iter().enumerate() {
-        close_rel(grid.cell_width(r as u32), w.as_f64().unwrap(), 1e-15, &format!("width {r}"));
+        assert_eq!(grid.cell_width(r as u32).to_bits(), w.as_f64().unwrap().to_bits(), "width {r}");
     }
     for (r, a) in fx["cell_area"].as_array().unwrap().iter().enumerate() {
-        close_rel(grid.cell_area(r as u32), a.as_f64().unwrap(), 1e-15, &format!("area {r}"));
+        assert_eq!(grid.cell_area(r as u32).to_bits(), a.as_f64().unwrap().to_bits(), "area {r}");
     }
     let mut n = 0;
     for c in fx["cells"].as_array().unwrap() {
         let suid = c["suid"].as_str().unwrap();
         let path = suid_to_path(suid).unwrap();
         let ul = grid.ul_vertex(&path);
-        close_rel(ul.0, c["ul"][0].as_f64().unwrap(), 1e-15, &format!("{suid} ul.x"));
-        close_rel(ul.1, c["ul"][1].as_f64().unwrap(), 1e-15, &format!("{suid} ul.y"));
+        assert_eq!((ul.0.to_bits(), ul.1.to_bits()), (c["ul"][0].as_f64().unwrap().to_bits(), c["ul"][1].as_f64().unwrap().to_bits()), "{suid} ul");
         let np = grid.nucleus_planar(&path);
-        close_rel(np.0, c["nucleus_planar"][0].as_f64().unwrap(), 1e-15, &format!("{suid} nucleus_planar.x"));
-        close_rel(np.1, c["nucleus_planar"][1].as_f64().unwrap(), 1e-15, &format!("{suid} nucleus_planar.y"));
+        let want_np = (c["nucleus_planar"][0].as_f64().unwrap(), c["nucleus_planar"][1].as_f64().unwrap());
+        assert_eq!((np.0.to_bits(), np.1.to_bits()), (want_np.0.to_bits(), want_np.1.to_bits()), "{suid} nucleus_planar");
         let nu = grid.nucleus(&path).unwrap();
-        lon_close(nu.0, c["nucleus"][0].as_f64().unwrap(), 1e-12, &format!("{suid} nucleus.lon"));
-        close(nu.1, c["nucleus"][1].as_f64().unwrap(), 1e-12, &format!("{suid} nucleus.lat"));
+        nucleus_parity(&listed, &mut seen, suid, nu, (c["nucleus"][0].as_f64().unwrap(), c["nucleus"][1].as_f64().unwrap()));
+        // boundary3 only draws cells and bounds the polygon cover's pruning (never its result),
+        // so it is compared to a tolerance
         let mut b = grid.boundary3(&path).unwrap();
         b.sort_by(|p, q| p.partial_cmp(q).unwrap());
         let want: Vec<(f64, f64)> = c["boundary3"].as_array().unwrap().iter().map(|p| (p[0].as_f64().unwrap(), p[1].as_f64().unwrap())).collect();
@@ -178,9 +196,11 @@ fn cells_parity(name: &str) {
         let path = suid_to_path(c["suid"].as_str().unwrap()).unwrap();
         let nu = grid.nucleus(&path).unwrap();
         assert_eq!(nu.0, -180.0, "{} seam nucleus lon", c["suid"]);
-        close(nu.1, c["nucleus"][1].as_f64().unwrap(), 1e-12, &format!("{} seam nucleus lat", c["suid"]));
+        nucleus_parity(&listed, &mut seen, c["suid"].as_str().unwrap(), nu, (c["nucleus"][0].as_f64().unwrap(), c["nucleus"][1].as_f64().unwrap()));
     }
     assert!(!seam.is_empty() || name == "ns1ss2", "expected some seam nuclei in {name}");
+    let stale: Vec<&String> = listed.keys().filter(|k| !seen.contains(*k)).collect();
+    assert!(stale.is_empty(), "{name}: listed nuclei no longer checked or no longer different: {stale:?}");
 }
 
 #[test]
