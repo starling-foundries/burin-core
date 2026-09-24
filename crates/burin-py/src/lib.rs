@@ -5,7 +5,8 @@ use burin_core::index::Index as CoreIndex;
 use burin_core::opening::{open_path, OpeningRecord};
 use burin_core::polyfill as pf;
 use burin_core::profile::Profile as CoreProfile;
-use burin_core::setops::{self, Op, SetOpProof};
+use burin_core::setops::{self, Op, SetOpProof, SetRelation};
+use burin_core::time as core_time;
 use burin_core::tree::Tree as CoreTree;
 use burin_core::zone;
 use burin_core::zone_data::{self, Presence};
@@ -15,7 +16,15 @@ use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::Value;
 use std::sync::Arc;
 
+mod time;
 mod vector;
+
+/// The most cells or leaves one call lists (2 GiB of ids).
+const MAX_LISTED: u64 = 1 << 28;
+
+fn relation(name: &str) -> PyResult<SetRelation> {
+    SetRelation::parse(name).ok_or_else(|| PyValueError::new_err(format!("unknown relation {name:?}; one of equals, disjoint, intersects, within, contains")))
+}
 
 fn err(e: burin_core::Error) -> PyErr {
     PyValueError::new_err(e.to_string())
@@ -173,6 +182,33 @@ impl Tree {
         Ok(Tree { inner, profile: p })
     }
 
+    /// The canonical time tree of a union of tick intervals `[(lo, hi), …]` (SPEC §11).
+    #[staticmethod]
+    #[pyo3(signature = (intervals, profile=None))]
+    fn from_intervals(py: Python<'_>, intervals: Vec<(u64, u64)>, profile: Option<&Profile>) -> PyResult<Tree> {
+        let p = profile_or_default(profile);
+        let ctx = Arc::new(core_time::ctx(&p).map_err(err)?);
+        let inner = py.detach(|| core_time::intervals_tree(&intervals, ctx)).map_err(err)?;
+        Ok(Tree { inner, profile: p })
+    }
+
+    /// The canonical time tree of time cids (any levels, any order, duplicates allowed).
+    #[staticmethod]
+    #[pyo3(signature = (cids, profile=None))]
+    fn from_time_cells(py: Python<'_>, cids: &Bound<'_, PyAny>, profile: Option<&Profile>) -> PyResult<Tree> {
+        let cids = cid_list(cids)?;
+        let p = profile_or_default(profile);
+        let ctx = Arc::new(core_time::ctx(&p).map_err(err)?);
+        let inner = py.detach(|| CoreTree::from_cells(core_time::TIME, core_time::TIME_DEPTH, cids, ctx)).map_err(err)?;
+        Ok(Tree { inner, profile: p })
+    }
+
+    /// `"space"` for a tree of zones, `"time"` for a tree of ticks.
+    #[getter]
+    fn axis(&self) -> &'static str {
+        if self.inner.h == core_time::TIME { "time" } else { "space" }
+    }
+
     #[getter]
     fn root_hex(&self) -> String {
         self.inner.root_hex()
@@ -190,9 +226,13 @@ impl Tree {
     fn cells(&self) -> Vec<u64> {
         self.inner.cells()
     }
-    /// Every covered leaf at `depth`, sorted.
-    fn leaves(&self) -> Vec<u64> {
-        self.inner.leaves()
+    /// Every covered leaf at `depth`, sorted. Refused past 2^28 leaves; use `cells`.
+    fn leaves(&self) -> PyResult<Vec<u64>> {
+        let n = self.inner.leaf_count();
+        if n > MAX_LISTED {
+            return Err(PyValueError::new_err(format!("{n} leaves are too many to list; the canonical cells are the same set")));
+        }
+        Ok(self.inner.leaves())
     }
     fn leaf_count(&self) -> u64 {
         self.inner.leaf_count()
@@ -281,9 +321,27 @@ impl Tree {
         from_json(py, &setops::prove(&self.inner, &other.inner, op).map_err(err)?.to_json())
     }
 
+    /// Whether `relation` (`equals`, `disjoint`, `intersects`, `within`, `contains`) holds
+    /// between this set and `other`.
+    fn holds(&self, other: &Tree, relation: &str) -> PyResult<bool> {
+        setops::holds(&self.inner, &other.inner, self::relation(relation)?).map_err(err)
+    }
+
+    /// The transcript that decides `relation` between this set and `other`, for
+    /// `verify_relation`; `None` for `equals`, which the roots decide alone.
+    fn relation_evidence<'py>(&self, py: Python<'py>, other: &Tree, relation: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
+        match setops::relation_transcript(&self.inner, &other.inner, self::relation(relation)?).map_err(err)? {
+            Some(p) => Ok(Some(from_json(py, &p.to_json())?)),
+            None => Ok(None),
+        }
+    }
+
     /// GeoJSON of the canonical cells (see `cells_geojson`).
     #[pyo3(signature = (n=3))]
     fn geojson<'py>(&self, py: Python<'py>, n: usize) -> PyResult<Bound<'py, PyAny>> {
+        if self.inner.h == core_time::TIME {
+            return Err(PyValueError::new_err("a time tree has no geometry"));
+        }
         let prof = Profile { inner: self.profile.clone() };
         cells_geojson(py, self.inner.cells(), Some(&prof), n)
     }
@@ -383,6 +441,25 @@ fn verify_opening(record: &Bound<'_, PyAny>) -> PyResult<bool> {
 fn verify_setop(proof: &Bound<'_, PyAny>) -> PyResult<bool> {
     let v = to_json(proof)?;
     Ok(SetOpProof::from_json(&v).map(|p| p.verify()).unwrap_or(false))
+}
+
+/// Whether `proof` (from `Tree.relation_evidence`) shows that `relation` holds between the sets
+/// whose roots are `root_x` and `root_y`. `False` on any defect; `equals` takes no proof.
+#[pyfunction]
+#[pyo3(signature = (relation, root_x, root_y, proof=None))]
+fn verify_relation(relation: &str, root_x: &str, root_y: &str, proof: Option<&Bound<'_, PyAny>>) -> PyResult<bool> {
+    let rel = self::relation(relation)?;
+    let (Some(x), Some(y)) = (burin_core::hash::unhex(root_x), burin_core::hash::unhex(root_y)) else {
+        return Ok(false);
+    };
+    let proof = match proof {
+        None => None,
+        Some(p) => match SetOpProof::from_json(&to_json(p)?) {
+            Ok(p) => Some(p),
+            Err(_) => return Ok(false),
+        },
+    };
+    Ok(setops::verify_relation(rel, &x, &y, proof.as_ref()))
 }
 
 #[pyfunction]
@@ -515,6 +592,13 @@ fn burin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fingerprint_polygon, m)?)?;
     m.add_function(wrap_pyfunction!(verify_opening, m)?)?;
     m.add_function(wrap_pyfunction!(verify_setop, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_relation, m)?)?;
+    m.add_function(wrap_pyfunction!(time::ticks, m)?)?;
+    m.add_function(wrap_pyfunction!(time::tick_starts, m)?)?;
+    m.add_function(wrap_pyfunction!(time::interval_cells, m)?)?;
+    m.add_function(wrap_pyfunction!(time::coarse_cells, m)?)?;
+    m.add_function(wrap_pyfunction!(time::cell_ticks, m)?)?;
+    m.add_function(wrap_pyfunction!(time::allen, m)?)?;
     m.add_function(wrap_pyfunction!(cell_area_m2, m)?)?;
     m.add_function(wrap_pyfunction!(cells_geojson, m)?)?;
     m.add_function(wrap_pyfunction!(suid_to_cid, m)?)?;
