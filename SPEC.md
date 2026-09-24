@@ -55,6 +55,8 @@ A constant node d levels above the leaves hashes to `EMPTY[d]` or `FULL[d]`; a b
 
 An **opening** is `{"claim": "empty"|"full"}` or `{"entries": [hex | opening] × A}` (× B at the top). The verifier recomputes bottom-up and compares with the root; the opened cell is the sequence of opened positions, and a proof moved to another position verifies only if its claim is true there too (as it is between the identical children of a constant node). A constant node passes through as A copies of itself. Record: `{"v":1,"hash","A","B","D","root","opening"}`.
 
+Openings do not hide: the sibling hashes along a path show which siblings are empty, full or identical.
+
 Each field has one spelling. Digests are 64 **lowercase** hex digits. `A`, `B` and `D` are read exactly: a reader refuses a value that does not fit a u32, a pair that is not a hierarchy of §2, and a `D` deeper than its deepest level, rather than reducing any of them. The bound on A also bounds what a record can make a verifier compute: building the constant ladders costs at most `2·D` hashes of `32·A` bytes, whatever the record claims.
 
 Set operations combine two trees of the same profile and depth by node-local rules on hashes (`FULL ∪ X = FULL`, `EMPTY ∪ X = X`; `EMPTY ∩ X = EMPTY`, `FULL ∩ X = X`; `EMPTY \ X = EMPTY`, `X \ FULL = EMPTY`, `X \ EMPTY = X`; equal hashes ⇒ equal sets, `X \ X = EMPTY`), descending only where both are partial and different. A **transcript** records `(h_a, h_b, h_c)` per step with children only at undecided steps; a decided step must have no children. Record: `{"v":1,"op","hash","root_a","root_b","root_c","A","B","D","steps"}`.
