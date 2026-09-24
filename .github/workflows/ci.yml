@@ -36,6 +36,7 @@ jobs:
       - working-directory: fuzz
         run: |
           for t in $(cargo fuzz list); do
+            mkdir -p "corpus/$t"
             cargo fuzz run "$t" "corpus/$t" "seeds/$t" -- -max_total_time=60 -max_len=65536 -timeout=10 -rss_limit_mb=2048
           done
 
@@ -59,8 +60,9 @@ jobs:
           uv run python -m mypy --strict python/burin
 
   fixtures:
-    # the committed fixtures must be exactly what the reference implementation produces
-    runs-on: ubuntu-latest
+    # the committed fixtures must be exactly what the reference implementation produces. The
+    # reference computes with the platform's libm, so this runs where they were made: macOS arm64
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
