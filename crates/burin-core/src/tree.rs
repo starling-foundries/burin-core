@@ -95,6 +95,9 @@ impl Tree {
         if ctx.ladders.depth() < d {
             return invalid(format!("context ladders reach depth {}, tree needs {d}", ctx.ladders.depth()));
         }
+        if d > h.max_level() {
+            return invalid(format!("depth {d} is deeper than the deepest level, {}", h.max_level()));
+        }
         Ok(Tree { h, d, bases: vec![Node::Empty; h.b as usize], ctx })
     }
 

@@ -42,6 +42,9 @@ impl Hierarchy {
         if b >= self.b {
             return invalid(format!("base {b} out of range [0, {})", self.b));
         }
+        if digits.len() as u32 > self.max_level() {
+            return invalid(format!("path of {} digits is deeper than the deepest level, {}", digits.len(), self.max_level()));
+        }
         let mut c = (self.a + b) as u64;
         for &d in digits {
             if d >= self.a {
@@ -50,6 +53,17 @@ impl Hierarchy {
             c = c * self.a as u64 + d as u64;
         }
         Ok(c)
+    }
+
+    /// The deepest level whose cids, and the leaf ranges of a tree that deep, fit in 64 bits:
+    /// the largest `r` with `(A + B)·A^r <= u64::MAX` (18 for rHEALPix).
+    pub fn max_level(&self) -> u32 {
+        let (mut r, mut top) = (0u32, (self.a + self.b) as u64);
+        while let Some(next) = top.checked_mul(self.a as u64) {
+            top = next;
+            r += 1;
+        }
+        r
     }
 
     pub fn level(&self, cid: Cid) -> u32 {

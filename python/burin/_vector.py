@@ -11,10 +11,13 @@ import numpy as np
 from . import _burin
 
 MAX_LEVEL = int(_burin.MAX_RESOLUTION)
+#: The most cells ``zoom_to`` returns in one call (2 GiB of ids).
+MAX_ZOOM_CELLS = 2**28
 _A = 9
 
 __all__ = [
     "MAX_LEVEL",
+    "MAX_ZOOM_CELLS",
     "level_range",
     "full_domain",
     "cell_levels",
@@ -86,7 +89,7 @@ def as_cell_ids(cell_ids, level: int | None = None) -> np.ndarray:
         raise TypeError(f"cell ids must be integers, got dtype {ids.dtype}")
     if ids.dtype.kind == "i" and (ids < 0).any():
         raise ValueError("cell ids are non-negative")
-    ids = np.ascontiguousarray(ids, dtype=np.uint64)
+    ids = np.asarray(ids, dtype=np.uint64, order="C")  # keeps a scalar 0-d, unlike ascontiguousarray
     if level is not None:
         lo, hi = level_range(level)
         outside = (ids < lo) | (ids >= hi)
@@ -117,6 +120,9 @@ def zoom_to(cell_ids, level: int, new_level: int) -> np.ndarray:
     step = abs(new_level - level)
     if new_level <= level:
         return ids // np.uint64(_A**step)
+    if ids.size * _A**step > MAX_ZOOM_CELLS:
+        raise ValueError(f"{ids.size} cells have {ids.size * _A**step} descendants {step} levels down, "
+                         f"more than MAX_ZOOM_CELLS ({MAX_ZOOM_CELLS}); zoom in smaller steps or fewer cells")
     children = np.arange(_A**step, dtype=np.uint64)
     return ids[..., None] * np.uint64(_A**step) + children
 
@@ -143,7 +149,7 @@ def cells_from_lonlat(lon, lat, level: int, *, profile=None, nthreads: int = 0) 
     Raises
     ------
     ValueError
-        If a coordinate is not finite.
+        If a coordinate is not finite or a latitude is outside [-90, 90]; longitudes wrap.
     """
     lon, lat = np.broadcast_arrays(np.asarray(lon, dtype=np.float64), np.asarray(lat, dtype=np.float64))
     cells = _burin._cells_from_lonlat(np.ascontiguousarray(lon).ravel(), np.ascontiguousarray(lat).ravel(),

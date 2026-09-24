@@ -217,9 +217,10 @@ impl Grid {
     }
 
     /// `(base, row, col)` of the cell at `level` containing `(lon, lat)` degrees, or `None` if the
-    /// point is not finite or projects outside the image.
+    /// point is not finite or its latitude is outside [-90, 90]. (The projection would fold such a
+    /// latitude into the other hemisphere; longitudes wrap, as they should.)
     pub fn cell_from_lonlat(&self, lon: f64, lat: f64, level: u32) -> Option<(u32, u64, u64)> {
-        if !(lon.is_finite() && lat.is_finite()) {
+        if !(lon.is_finite() && (-90.0..=90.0).contains(&lat)) {
             return None;
         }
         let (x, y) = self.forward(lon, lat, None);

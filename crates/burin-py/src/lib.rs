@@ -22,17 +22,24 @@ fn err(e: burin_core::Error) -> PyErr {
 }
 
 /// A Python object (dict/list/str) → JSON value, via the `json` module for anything but str.
+/// NaN and infinity are refused: they are not JSON, and a missing value is null.
 fn to_json(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     let s: String = if let Ok(s) = obj.extract::<String>() {
         s
     } else {
-        let json = obj.py().import("json")?;
-        json.call_method1("dumps", (obj,))?.extract()?
+        let py = obj.py();
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("allow_nan", false)?;
+        let dumped = py.import("json")?.call_method("dumps", (obj,), Some(&kwargs));
+        dumped
+            .map_err(|e| PyValueError::new_err(format!("not JSON ({e}); a missing value is null, not NaN")))?
+            .extract()?
     };
     serde_json::from_str(&s).map_err(|e| PyValueError::new_err(format!("not JSON: {e}")))
 }
 
-/// Cell ids from a uint64 numpy array (read directly) or any sequence of ints.
+/// Cell ids from a uint64 numpy array (read directly) or any iterable of ints (a list, a set, a
+/// generator).
 fn cid_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
     use numpy::PyArrayMethods;
     if let Ok(a) = obj.cast::<numpy::PyArray1<u64>>() {
@@ -40,7 +47,7 @@ fn cid_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
             return Ok(v);
         }
     }
-    obj.extract()
+    obj.try_iter()?.map(|item| item?.extract::<u64>()).collect()
 }
 
 fn from_json<'py>(py: Python<'py>, v: &Value) -> PyResult<Bound<'py, PyAny>> {

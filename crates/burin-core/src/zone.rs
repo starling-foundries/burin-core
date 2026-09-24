@@ -100,6 +100,9 @@ pub fn cell_from_point(profile: &Profile, lon: f64, lat: f64, level: u32) -> Res
 
 /// The cid at `(row, col)` of base cell `base` at `level`.
 pub fn cell_at(h: &Hierarchy, base: u32, level: u32, row: u64, col: u64) -> Result<Cid> {
+    if level > h.max_level() {
+        return invalid(format!("level {level} is deeper than the deepest level, {}", h.max_level()));
+    }
     let n = side(h)?;
     let width = span(h, level)?;
     if base >= h.b {
