@@ -1,107 +1,14 @@
 # Time and space-time: specification (draft)
 
-*Status: **Draft**. Nothing here is implemented. Each section moves into SPEC.md, with fixtures,
-when its code lands. Section numbers continue SPEC.md's.*
+*Status: **Draft**. §9–§12 (the time line, its hierarchy, the interval rule and relations) are
+implemented and now live in SPEC.md. What remains here is not yet implemented; each section moves
+into SPEC.md, with fixtures, when its code lands.*
 
 Time is given the same program as space: a hierarchy, a rule that turns a place in it into cells,
 a canonical tree and its root, openings, set algebra and relations. Space-time is the spatial tree
 with time sets at its leaves, defined so that every spatial root of SPEC §4 is already the
 space-time root of "this region, at all times". Existing roots, records and profile ids are
 unchanged.
-
-## 9. The time line
-
-**Scale.** Instants are POSIX time, the OGC-registered temporal CRS
-`https://www.opengis.net/def/crs/OGC/0/UnixTime`, counted in microseconds since
-1970-01-01T00:00:00Z, leap seconds not counted. A leap second (`23:59:60`) has no POSIX instant and is refused, as is any calendar
-without real instants (CF `noleap`, `360_day` and similar).
-
-**Ticks.** Under a profile (§1), an instant `t` falls in the tick
-
-```
-tick(t) = floor((t − epoch_us) / tick_us) + 2^60        computed exactly (128-bit), floor toward −∞
-```
-
-and is refused unless `0 ≤ tick(t) < 2^61`. With the default `tick_us = 1`, `epoch_us = 0`, the
-line is 1 µs ticks centred on 1970, about 36,500 years either side. The profile's time fields
-were reserved at these values, so every profile id stays as it is. A profile with
-`tick_us = 86 400 000 000` has day ticks; its id differs, so day-tick and µs-tick records cannot
-be confused.
-
-An instant given as text is RFC 3339 with a `Z` or numeric offset and at most 6 fractional digits.
-A date alone (`2020-01-01`) is the start of that day in UTC. `datetime64[ns]` converts by
-`floor(ns / 1000)`. A float is never accepted: time is integer arithmetic throughout, so every
-result below is exact on every platform.
-
-## 10. The time hierarchy
-
-Time is the hierarchy **H(2, 1)** of §2 with the fixed depth **D_T = 61**. Cell `k` at level `r`
-(`0 ≤ k < 2^r`) is the ticks `[k·2^(61−r), (k+1)·2^(61−r))`, and its cid is `2^(r+1) + k`. A
-level-61 cid is `2^62 + tick`. Parent, children and descendants are those of §2: coarsening an
-instant to level `r` is `cid >> (61 − r)`. Neighbours are `cid ± 1` within the level.
-
-The resolution and span match the IVOA Time-MOC (MOC 2.0: 1 µs cells, order 61). The time scale
-and origin differ, since the Time-MOC counts from Julian Day 0 in TCB, so the two agree cell for
-cell only at the tick level, through a fixed offset.
-
-## 11. The interval rule
-
-An **interval** is `[lo, hi)` in ticks, `0 ≤ lo < hi ≤ 2^61`. Its cells are its ticks. Held
-canonically (§4), those ticks are the compact cell list, at most `2·61` cells. The HINT boundary
-walk produces that list directly:
-
-```
-walk(lo, hi, level = 61):   while lo < hi:
-    if lo is odd:  emit (level, lo);  lo += 1
-    if hi is odd:  hi -= 1;  emit (level, hi)
-    lo, hi, level = lo/2, hi/2, level − 1
-```
-
-A **time set** is any union of intervals. Its **time root** is the root (§4) of its time tree at
-depth 61, under the profile's hash, with `A = 2`, `B = 1`. The time root depends on the set
-alone, not on how it was split into intervals. Because the depth is fixed, a set has exactly one
-time root, and no resolution parameter enters it.
-
-The empty set and the whole line have the constant roots `E_T` and `F_T`.
-
-**Coarse cells.** A caller who wants whole cells of level `r < 61`, such as whole hours, takes
-the level-`r` cells whose midpoint tick lies in `I`, as §3 does with nuclei. This only chooses a
-set. That set's root is computed as any other's, and an interval's own root is always that of its
-exact ticks.
-
-## 12. Relations
-
-**Between two intervals.** Allen's thirteen relations are decided by comparing endpoints. For
-non-empty `a = [a₁, a₂)` and `b = [b₁, b₂)`:
-
-| relation | condition | inverse | condition |
-|---|---|---|---|
-| before | `a₂ < b₁` | after | `b₂ < a₁` |
-| meets | `a₂ = b₁` | met-by | `b₂ = a₁` |
-| overlaps | `a₁ < b₁ < a₂ < b₂` | overlapped-by | `b₁ < a₁ < b₂ < a₂` |
-| starts | `a₁ = b₁ ∧ a₂ < b₂` | started-by | `a₁ = b₁ ∧ b₂ < a₂` |
-| during | `b₁ < a₁ ∧ a₂ < b₂` | contains | `a₁ < b₁ ∧ b₂ < a₂` |
-| finishes | `b₁ < a₁ ∧ a₂ = b₂` | finished-by | `a₁ < b₁ ∧ a₂ = b₂` |
-| equals | `a₁ = b₁ ∧ a₂ = b₂` | | |
-
-With half-open intervals, `meets` means adjacent and sharing no tick. A signed record states its
-interval's endpoints (§15), so any reader can decide all thirteen against any other interval from
-the record alone.
-
-**Between two sets.** Space, time and space-time sets share five relations, each proven by one
-set-operation transcript (§5) of the same hierarchy and depth. `∅` is the empty tree's root.
-
-| relation | holds iff | evidence |
-|---|---|---|
-| equals | `root(X) = root(Y)` | none |
-| disjoint | `X ∩ Y = ∅` | intersect transcript with `root_c = ∅` |
-| intersects | `X ∩ Y ≠ ∅` | intersect transcript with `root_c ≠ ∅` |
-| within | `X ∖ Y = ∅` | difference transcript `X ∖ Y` with `root_c = ∅` |
-| contains | `Y ∖ X = ∅` | difference transcript `Y ∖ X` with `root_c = ∅` |
-
-Only these lift from intervals to sets: whether two sets *meet* or one *starts* the other is not a
-property of their cells alone. Where Allen and set relations share a name (`equals`, `contains`),
-the Allen relation implies the set relation.
 
 ## 13. The space-time tree
 
@@ -246,15 +153,3 @@ Withheld records cannot be detected. That limit is inherent to any signed log.
   where, when and joint.
 
 Both identify a record; neither replaces it.
-
-## Correspondence with OGC's time specification
-
-In the terms of the OGC Abstract Specification on Time (OGC 23-049, draft), the line of §9 is a
-discrete timescale:
-- its clock is the profile's tick;
-- its epoch is `epoch_us` on the POSIX scale;
-- its coordinate is the tick count, a Unix-style count as in 23-049's own examples.
-
-23-049 also notes that there is no consensus on leap seconds. §9 settles it by using POSIX time,
-which has none. Allen's relations (§12) are the ones 23-049 uses for ordering intervals.
-23-049 defines no grid of time and no temporal DGGS, so §10 does not depart from it.

@@ -19,6 +19,9 @@ These are defined by [SPEC.md](SPEC.md) and pinned by the fixtures under
 | the cell containing a point, the forward projection and the nuclei, to the bit | SPEC §6 | `points_burin.json` |
 | the sub-zone order, the raster layout and DGGS-JSON zone data | SPEC §7–8 | `topology.json`, `dggal_rhealpix.json` |
 | the order of the edge neighbours (up, right, down, left) | SPEC §8 | `topology.json`, `dggal_rhealpix.json` |
+| the tick of an instant, and where a tick starts | SPEC §9 | `time.json` |
+| the time cid of a cell, and the cells and root of a time set | SPEC §10–§11 | `time.json` |
+| the names of Allen's relations and of the five set relations, and what evidence each takes | SPEC §12 | `time.json`, `time.rs` |
 
 A wire output changes only under a new name: a record version (`v: 2`), a new hash id in the
 profile, or a new profile. A release never changes what an existing name produces. If one ever

@@ -3,6 +3,35 @@
 What counts as a wire output, and what may change between releases, is set out in
 [STABILITY.md](STABILITY.md).
 
+## 0.3.0 (unreleased)
+
+No wire output changed. Time is new.
+
+### Added
+
+- **The time line** (SPEC §9–§12), with the same program as space:
+  - instants are POSIX microseconds, never floats, and fall in the profile's ticks (1 µs by
+    default, centred on 1970, about 36,500 years either side);
+  - time cells form the binary hierarchy `H(2, 1)` at a fixed depth of 61;
+  - an interval's cells come from the HINT boundary walk, and a time set has one root with no
+    resolution parameter;
+  - Allen's thirteen relations between intervals.
+- **In Rust:** `time::{tick, tick_start, interval_cells, coarse_cells, intervals_tree, allen, …}`.
+- **In Python:** the `burin.time` module (`ticks`, `cells_from_times`, `times_of_cells`,
+  `zoom_to`, `interval`, `tree`, `allen`, …) on datetime64 arrays of any unit, and
+  `Tree.from_intervals`, `Tree.from_time_cells` and `Tree.axis`.
+- **Five set relations** for space and time alike: `equals`, `disjoint`, `intersects`, `within`
+  and `contains`. The evidence is a set-operation transcript, and it verifies against the two
+  roots alone (`relation_transcript`, `verify_relation`, `Tree.holds`, `Tree.relation_evidence`).
+- **Testing:** `time.json`, a conformance fixture computed from the specification's text by an
+  independent reference (`tools/gen_time_fixtures.py`), plus a time fuzz target.
+- `SPEC-time.md`, the draft of the space-time tree, zone data with time and the signed record.
+
+### Changed
+
+- `Tree.leaves()` refuses to list more than 2^28 leaves instead of trying to allocate them.
+- `Tree.geojson()` refuses a time tree.
+
 ## 0.2.0 (2026-09-24)
 
 No wire output changed. The frozen roots, polygon cell sets and topology fixtures of 0.1.0

@@ -54,6 +54,19 @@ bc.full_domain(3)                                   # every cell at a level: cid
 bc.Tree.from_cells(cells, 9).root_hex               # the fingerprint of any set of cells
 ```
 
+Time has the same program (SPEC §9–§12): instants in, integer ticks and time cells out, exactly.
+
+```python
+from burin import time as bt
+
+bt.ticks(times)                                     # datetime64 of any unit → uint64 ticks (1 µs by default)
+bt.cells_from_times(times, level=40)                # the time cell containing each instant
+start, end = bt.times_of_cells(cells_t)             # each cell's [start, end) as datetime64[us]
+day = bt.tree([("2013-07-15", "2013-07-16")])       # a time set; day.root_hex is its fingerprint
+bt.allen(bt.interval("2013-07-01", "2013-08-01"), bt.interval("2013-07-15", "2013-07-16"))   # 'contains'
+t.holds(u, "within"); bc.verify_relation("within", t.root_hex, u.root_hex, t.relation_evidence(u, "within"))
+```
+
 ## Rust
 
 ```rust
