@@ -39,6 +39,7 @@ dependencies = [
  "geo",
  "hex",
  "libm",
+ "rayon",
  "robust",
  "rstar",
  "serde",
