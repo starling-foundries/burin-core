@@ -78,4 +78,7 @@ cargo test -p burin-core                      # parity fixtures + structural pro
 uv run --no-project --with rhealpixdggs==0.8.6 --with shapely python tools/gen_fixtures.py   # regenerate set 1
 cargo run -p burin-core --example freeze     # regenerate set 2 (golden roots; a wire-format bump)
 uv venv && uv pip install maturin pytest && uv run maturin develop && uv run pytest
+cd fuzz && cargo +nightly fuzz run opening_record corpus/opening_record seeds/opening_record   # any target in fuzz/
 ```
+
+Which outputs are frozen and how versions move are in [STABILITY.md](STABILITY.md); what changed is in [CHANGELOG.md](CHANGELOG.md).

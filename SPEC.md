@@ -49,7 +49,7 @@ node(c₀…c_{A−1}) = H(0x02 ‖ c₀ ‖ … ‖ c_{A−1})
 root(b₀…b_{B−1})  = H(0x03 ‖ b₀ ‖ … ‖ b_{B−1})
 ```
 
-A constant node d levels above the leaves hashes to `EMPTY[d]` or `FULL[d]`; a branch hashes to `node` over its children's hashes; the root is `root` over the B base hashes, each at depth D = R. **The root depends only on the covered leaf set, D, and the profile**: insertion order, duplicates and tiling do not matter. `fingerprint(P, R, profile) = root(cells(P, R))`.
+A constant node d levels above the leaves hashes to `EMPTY[d]` or `FULL[d]`; a branch hashes to `node` over its children's hashes; the root is `root` over the B base hashes, each at depth D = R. **The root depends only on the covered leaf set, D, and the profile's hash, A and B**: insertion order, duplicates and tiling do not matter. The profile's other fields decide which leaves a polygon covers, not how a leaf set hashes. `fingerprint(P, R, profile) = root(cells(P, R))`.
 
 ## 5. Openings and set algebra
 
