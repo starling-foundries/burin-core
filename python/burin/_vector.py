@@ -6,7 +6,10 @@ its descendants are integer arithmetic; only the geometry goes to the compiled c
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
 from . import _burin
 
@@ -30,7 +33,7 @@ __all__ = [
 ]
 
 
-def _check_level(level) -> int:
+def _check_level(level: Any) -> int:
     if isinstance(level, bool) or int(level) != level or not 0 <= int(level) <= MAX_LEVEL:
         raise ValueError(f"level must be an integer between 0 and {MAX_LEVEL}, got {level!r}")
     return int(level)
@@ -53,13 +56,13 @@ def level_range(level: int) -> tuple[int, int]:
     return _A ** (level + 1), 15 * _A**level
 
 
-def full_domain(level: int) -> np.ndarray:
+def full_domain(level: int) -> NDArray[np.uint64]:
     """Every cell at ``level``, sorted, as uint64 (``6 * 9**level`` of them)."""
     lo, hi = level_range(level)
     return np.arange(lo, hi, dtype=np.uint64)
 
 
-def cell_levels(cell_ids) -> np.ndarray:
+def cell_levels(cell_ids: ArrayLike) -> NDArray[np.int64]:
     """The level of each cid, as int64; raises ``ValueError`` if any id is not a cid."""
     ids = as_cell_ids(cell_ids)
     starts = np.array([_A ** (r + 1) for r in range(MAX_LEVEL + 1)], dtype=np.uint64)
@@ -71,7 +74,7 @@ def cell_levels(cell_ids) -> np.ndarray:
     return levels
 
 
-def as_cell_ids(cell_ids, level: int | None = None) -> np.ndarray:
+def as_cell_ids(cell_ids: ArrayLike, level: int | None = None) -> NDArray[np.uint64]:
     """Cell ids as a contiguous uint64 array of the same shape.
 
     Integer arrays of any width are accepted if non-negative. With ``level``, every id must be a
@@ -98,7 +101,7 @@ def as_cell_ids(cell_ids, level: int | None = None) -> np.ndarray:
     return ids
 
 
-def zoom_to(cell_ids, level: int, new_level: int) -> np.ndarray:
+def zoom_to(cell_ids: ArrayLike, level: int, new_level: int) -> NDArray[np.uint64]:
     """Ancestors or descendants of cells at ``level``.
 
     Parameters
@@ -127,7 +130,8 @@ def zoom_to(cell_ids, level: int, new_level: int) -> np.ndarray:
     return ids[..., None] * np.uint64(_A**step) + children
 
 
-def cells_from_lonlat(lon, lat, level: int, *, profile=None, nthreads: int = 0) -> np.ndarray:
+def cells_from_lonlat(lon: ArrayLike, lat: ArrayLike, level: int, *, profile: _burin.Profile | None = None,
+                      nthreads: int = 0) -> NDArray[np.uint64]:
     """The cell at ``level`` containing each point.
 
     Parameters
@@ -157,14 +161,16 @@ def cells_from_lonlat(lon, lat, level: int, *, profile=None, nthreads: int = 0) 
     return cells.reshape(lon.shape)
 
 
-def cells_to_lonlat(cell_ids, *, profile=None, nthreads: int = 0) -> tuple[np.ndarray, np.ndarray]:
+def cells_to_lonlat(cell_ids: ArrayLike, *, profile: _burin.Profile | None = None,
+                    nthreads: int = 0) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """The nucleus of each cell as ``(lon, lat)`` degrees, each of the shape of ``cell_ids``."""
     ids = as_cell_ids(cell_ids)
     lon, lat = _burin._cells_to_lonlat(ids.ravel(), profile, nthreads)
     return lon.reshape(ids.shape), lat.reshape(ids.shape)
 
 
-def cell_boundaries(cell_ids, *, n: int = 5, profile=None, nthreads: int = 0) -> tuple[np.ndarray, np.ndarray]:
+def cell_boundaries(cell_ids: ArrayLike, *, n: int = 5, profile: _burin.Profile | None = None,
+                    nthreads: int = 0) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
     """Each cell's polygon, as ragged arrays.
 
     Rings are closed and counterclockwise in ``(lon, lat)`` degrees. Equatorial cells are their
@@ -187,7 +193,8 @@ def cell_boundaries(cell_ids, *, n: int = 5, profile=None, nthreads: int = 0) ->
     return _burin._cell_boundaries(as_cell_ids(cell_ids).ravel(), int(n), profile, nthreads)
 
 
-def cell_neighbours(cell_ids, *, profile=None, nthreads: int = 0) -> np.ndarray:
+def cell_neighbours(cell_ids: ArrayLike, *, profile: _burin.Profile | None = None,
+                    nthreads: int = 0) -> NDArray[np.uint64]:
     """The four edge neighbours of each cell, shape ``cell_ids.shape + (4,)``: up, right, down,
     left in the cell's planar frame."""
     ids = as_cell_ids(cell_ids)

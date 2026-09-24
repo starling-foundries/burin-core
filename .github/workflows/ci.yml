@@ -51,6 +51,12 @@ jobs:
       - run: uv venv && uv pip install maturin pytest numpy shapely
       - run: uv run maturin develop --release
       - run: uv run pytest
+      - if: matrix.os == 'ubuntu-latest'
+        name: the type stubs match the compiled module
+        run: |
+          uv pip install mypy
+          uv run python -m mypy.stubtest burin._burin
+          uv run python -m mypy --strict python/burin
 
   fixtures:
     # the committed fixtures must be exactly what the reference implementation produces
