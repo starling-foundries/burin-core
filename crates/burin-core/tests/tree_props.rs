@@ -239,3 +239,18 @@ fn bulk_build_equals_cell_by_cell_insertion() {
     assert!(Tree::from_cells(SPACE, 4, planet, ctx(4)).unwrap().is_full());
     assert!(Tree::from_cells(SPACE, 2, [SPACE.cid(&[0, 0, 0, 0]).unwrap()], ctx(2)).is_err(), "a cell below the depth");
 }
+
+#[test]
+fn large_lists_build_the_same_tree_on_any_schedule() {
+    // enough leaf ranges to take the parallel path when the `parallel` feature is on
+    let mut rng = Rng(0x0dd_ba11);
+    let d = 7;
+    let cells = random_cells(&mut rng, &SPACE, d, 30_000);
+    let bulk = Tree::from_cells(SPACE, d, cells.clone(), ctx(d)).unwrap();
+    let one = cells.iter().fold(Tree::empty(SPACE, d, ctx(d)).unwrap(), |t, &c| t.set_full(c).unwrap());
+    assert_eq!(bulk.root(), one.root());
+    assert_eq!(bulk.cells(), one.cells());
+    for _ in 0..3 {
+        assert_eq!(Tree::from_cells(SPACE, d, cells.clone(), ctx(d)).unwrap().root(), bulk.root(), "a rebuild differs");
+    }
+}

@@ -14,6 +14,11 @@ use crate::hash::{Ctx, Digest};
 use crate::hierarchy::{Cid, Hierarchy};
 use std::sync::Arc;
 
+/// With the `parallel` feature, a subtree holding at least this many leaf ranges builds its
+/// children on the rayon pool.
+#[cfg(feature = "parallel")]
+const PARALLEL_SPANS: usize = 4096;
+
 #[derive(Debug)]
 pub struct Branch {
     pub children: Vec<Node>,
@@ -130,11 +135,27 @@ impl Tree {
                 _ => {}
             }
             let step = (hi - lo) / a;
-            let children = (0..a).map(|k| build(lo + k * step, lo + (k + 1) * step, above - 1, spans, a, ctx)).collect();
+            let child = |k: u64| build(lo + k * step, lo + (k + 1) * step, above - 1, spans, a, ctx);
+            #[cfg(feature = "parallel")]
+            let children: Vec<Node> = if spans.len() >= PARALLEL_SPANS {
+                use rayon::prelude::*;
+                (0..a).into_par_iter().map(child).collect()
+            } else {
+                (0..a).map(child).collect()
+            };
+            #[cfg(not(feature = "parallel"))]
+            let children: Vec<Node> = (0..a).map(child).collect();
             make_branch(children, above, ctx)
         }
         let span = a.pow(d);
-        let bases = (0..h.b as u64).map(|b| build((a + b) * span, (a + b + 1) * span, d, &merged, a, &empty.ctx)).collect();
+        let base = |b: u64| build((a + b) * span, (a + b + 1) * span, d, &merged, a, &empty.ctx);
+        #[cfg(feature = "parallel")]
+        let bases = {
+            use rayon::prelude::*;
+            (0..h.b as u64).into_par_iter().map(base).collect()
+        };
+        #[cfg(not(feature = "parallel"))]
+        let bases = (0..h.b as u64).map(base).collect();
         Ok(Tree { bases, ..empty })
     }
 

@@ -153,11 +153,12 @@ impl Tree {
     /// Cover every cid (any levels up to `depth`, any order, duplicates allowed).
     #[staticmethod]
     #[pyo3(signature = (cids, depth, profile=None))]
-    fn from_cells(cids: &Bound<'_, PyAny>, depth: u32, profile: Option<&Profile>) -> PyResult<Tree> {
+    fn from_cells(py: Python<'_>, cids: &Bound<'_, PyAny>, depth: u32, profile: Option<&Profile>) -> PyResult<Tree> {
         let cids = cid_list(cids)?;
         let p = profile_or_default(profile);
         let ctx = Arc::new(p.ctx(depth).map_err(err)?);
-        let inner = CoreTree::from_cells(p.hierarchy(), depth, cids, ctx).map_err(err)?;
+        let h = p.hierarchy();
+        let inner = py.detach(|| CoreTree::from_cells(h, depth, cids, ctx)).map_err(err)?;
         Ok(Tree { inner, profile: p })
     }
 

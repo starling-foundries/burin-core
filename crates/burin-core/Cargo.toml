@@ -16,3 +16,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["float_roundtrip"] }  # exact decimal parsing
 sha2 = "0.11.0"
 thiserror = "2.0.20"
+rayon = { version = "1.12", optional = true }
+
+[features]
+# build large trees on all cores; the result is identical, only the scheduling differs
+parallel = ["dep:rayon"]
