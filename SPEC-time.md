@@ -63,9 +63,10 @@ time root, and no resolution parameter enters it.
 
 The empty set and the whole line have the constant roots `E_T` and `F_T`.
 
-**Coarse rule.** Where a set is wanted at level `r < 61`, a level-`r` cell belongs to
-`cells(I, r)` iff its midpoint tick lies in `I`. This is the time counterpart of the nucleus rule
-of §3. It is optional: the exact set (level 61) is the default.
+**Coarse cells.** A caller who wants whole cells of level `r < 61`, such as whole hours, takes
+the level-`r` cells whose midpoint tick lies in `I`, as §3 does with nuclei. This only chooses a
+set. That set's root is computed as any other's, and an interval's own root is always that of its
+exact ticks.
 
 ## 12. Relations
 
@@ -137,9 +138,30 @@ empty. Its **span** is the union of its time sets. Both are ordinary spatial and
 `A = 2`, `B = 1`, `D = 61`) against τ. The spatial recomputation takes `U_τ[d]` at the claim. The
 time opening then proves a tick, or the ticks of an interval, in or out of τ.
 
-**Set algebra.** The node-local rules of §5 hold with EMPTY and FULL read as `U_{E_T}` and
-`U_{F_T}`. Two uniform nodes combine into `U_{τ ⊕ σ}`, and a step there carries a nested time
-transcript proving `τ ⊕ σ`. The transcript format is to be fixed with the implementation.
+**Set algebra.** A space-time transcript is a §5 transcript over the spatial tree in which a step
+may also carry `time`:
+
+```json
+{"a": hex, "b": hex, "c": hex,
+ "time": {"ta": hex, "tb": hex, "tc": hex, "steps": [time step]}}
+```
+
+A step has at most one of `children` and `time`. A verifier checks a step at spatial depth `d` as
+follows:
+1. **Decided by §5.** If the rules of §5 decide it (an operand is `EMPTY[d]` or `FULL[d]` in a
+   case the rules cover, or `a = b`), it must have neither `children` nor `time`, and `c` must be
+   the rule's result.
+2. **Time step.** Otherwise, if it has `time`, then:
+   - `a = U_ta[d]` and `b = U_tb[d]`;
+   - `{op, ta, tb, tc, steps}` verifies as a §5 transcript over time (`A = 2`, `B = 1`, `D = 61`);
+   - `c = U_tc[d]`.
+3. **Branch step.** Otherwise it has `children`, checked as in §5. A uniform operand passes
+   through as A copies of `U_τ[d−1]`, as constants do in §5.
+
+A prover takes a time step at the first node where both operands are uniform. `FULL ∖ U_τ`, for
+example, is a time step with `ta = F_T`, whose result is the complement of τ. The statement a
+transcript proves is its op and three roots; two transcripts of one statement may differ in
+where they take their time steps.
 
 ## 14. Zone data with time
 
@@ -197,6 +219,15 @@ preceded by a kind byte: 0 means absent; 1 and 2 are the forms in the table, in 
 is SHA-256 of those bytes. The **signature** is Ed25519 over them. JSON records spell each field as
 the other records of this specification do, with lowercase hex.
 
+**Versions.** The tag is the version: a changed encoding gets a new tag
+(`BURIN-RECORD-2`, …), and no separate version field is needed. `prev` is the id of the key's
+previous record, whatever its tag. A chain therefore runs unbroken across format versions, and
+each upgrade is itself a signed, chained step.
+
+**The chain is per key.** It orders one signer's records and cannot place them against another
+signer's. For that, a record names the other's id in `what`, or both sign into a shared public
+log. Either is built from records, and neither needs anything further in this specification.
+
 **Evidence of misbehaviour.** Two validly signed records under one key are self-contained proof:
 - **equivocation:** equal `seq`, different ids;
 - **backdating:** `seq_a < seq_b` but `issued_b < issued_a`.
@@ -211,14 +242,14 @@ Withheld records cannot be detected. That limit is inherent to any signed log.
 
 Both identify a record; neither replaces it.
 
-## Open questions
+## Correspondence with OGC's time specification
 
-1. **Instants or intervals.** Should a time step without bounds (a CF time coordinate with no
-   `bounds`) mean an instant (one tick, as above), or run until the next step?
-2. **Coarse rule.** Is the midpoint rule for coarse time cells wanted in the standard, or only as a
-   convenience?
-3. **Space-time transcripts.** The nested transcript format of §13.
-4. **Record version.** Whether records carry an explicit version (`v`) beside the tag.
-5. **OGC Part 3.** OGC Topic 21 Part 3 (spatio-temporal DGGS, OGC 20-048r0, in draft) has not been
-   read. Whether it constrains time hierarchies should be checked before §10 is final.
-6. **Registered name.** A registered name for the time line, as §7 names the DGGRS.
+In the terms of the OGC Abstract Specification on Time (OGC 23-049, draft), the line of §9 is a
+discrete timescale:
+- its clock is the profile's tick;
+- its epoch is `epoch_us` on the POSIX scale;
+- its coordinate is the tick count, a Unix-style count as in 23-049's own examples.
+
+23-049 also notes that there is no consensus on leap seconds. §9 settles it by using POSIX time,
+which has none. Allen's relations (§12) are the ones 23-049 uses for ordering intervals.
+23-049 defines no grid of time and no temporal DGGS, so §10 does not depart from it.
