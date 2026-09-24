@@ -3,7 +3,7 @@
 What counts as a wire output, and what may change between releases, is set out in
 [STABILITY.md](STABILITY.md).
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-09-24)
 
 No wire output changed. The frozen roots, polygon cell sets and topology fixtures of 0.1.0
 reproduce exactly.
