@@ -26,6 +26,8 @@ manifest-path = "crates/burin-py/Cargo.toml"
 module-name = "burin._burin"
 python-source = "python"
 features = ["pyo3/abi3-py39"]
+# the metadata names LICENSE; the sdist must carry it
+include = [{ path = "LICENSE", format = "sdist" }]
 
 [dependency-groups]
 dev = ["pytest>=8", "maturin>=1.7"]
