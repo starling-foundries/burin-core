@@ -25,7 +25,7 @@ Derived floats: `lon_0 = lon_0_udeg / 10⁶`, `a = a_um / 10⁶`, `inv_f = inv_f
 
 ## 2. Cells
 
-The hierarchy H(A, B): a **path** `(b, d₁ … d_r)` with `b ∈ [0,B)`, `d_i ∈ [0,A)`; its **cid** is the integer `(A + b)·A^r + Σ d_i·A^(r−1−i)`. Parent = `cid div A`, child k = `A·cid + k`, descendants k levels down = `[cid·A^k, (cid+1)·A^k)`. The rHEALPix **suid** `Q453` is base letter `NOPQRS[b]` followed by the digits.
+The hierarchy H(A, B), with `2 ≤ A ≤ 4096` and `1 ≤ B ≤ A(A−1)`: a **path** `(b, d₁ … d_r)` with `b ∈ [0,B)`, `d_i ∈ [0,A)` and `r` at most the **deepest level**, the largest `r` with `(A + B)·A^r < 2⁶⁴` (18 for rHEALPix); its **cid** is the integer `(A + b)·A^r + Σ d_i·A^(r−1−i)`. Parent = `cid div A`, child k = `A·cid + k`, descendants k levels down = `[cid·A^k, (cid+1)·A^k)`. The rHEALPix **suid** `Q453` is base letter `NOPQRS[b]` followed by the digits.
 
 Cell geometry follows rhealpixdggs-py 0.8.6 exactly (§6): base upper-left vertices on the unit
 authalic sphere `N (−π + ns·π/2, 3π/4)`, `O (−π, π/4)`, `P (−π/2, π/4)`, `Q (0, π/4)`, `R (π/2, π/4)`, `S (−π + ss·π/2, −π/4)`, scaled by `R_A`; child k of a cell occupies row `k div N`, column `k mod N` of its parent's N×N split; `width(r) = R_A·(π/2)·N^(−r)`; the **nucleus** is the inverse projection of the planar cell centre `(ul.x + w/2, ul.y − w/2)`.
@@ -53,7 +53,9 @@ A constant node d levels above the leaves hashes to `EMPTY[d]` or `FULL[d]`; a b
 
 ## 5. Openings and set algebra
 
-An **opening** is `{"claim": "empty"|"full"}` or `{"entries": [hex | opening] × A}` (× B at the top). The verifier recomputes bottom-up and compares with the root; the opened cell is the sequence of opened positions and cannot be relabelled. A constant node passes through as A copies of itself. Record: `{"v":1,"hash","A","B","D","root","opening"}`.
+An **opening** is `{"claim": "empty"|"full"}` or `{"entries": [hex | opening] × A}` (× B at the top). The verifier recomputes bottom-up and compares with the root; the opened cell is the sequence of opened positions, and a proof moved to another position verifies only if its claim is true there too (as it is between the identical children of a constant node). A constant node passes through as A copies of itself. Record: `{"v":1,"hash","A","B","D","root","opening"}`.
+
+Each field has one spelling. Digests are 64 **lowercase** hex digits. `A`, `B` and `D` are read exactly: a reader refuses a value that does not fit a u32, a pair that is not a hierarchy of §2, and a `D` deeper than its deepest level, rather than reducing any of them. The bound on A also bounds what a record can make a verifier compute: building the constant ladders costs at most `2·D` hashes of `32·A` bytes, whatever the record claims.
 
 Set operations combine two trees of the same profile and depth by node-local rules on hashes (`FULL ∪ X = FULL`, `EMPTY ∪ X = X`; `EMPTY ∩ X = EMPTY`, `FULL ∩ X = X`; `EMPTY \ X = EMPTY`, `X \ FULL = EMPTY`, `X \ EMPTY = X`; equal hashes ⇒ equal sets, `X \ X = EMPTY`), descending only where both are partial and different. A **transcript** records `(h_a, h_b, h_c)` per step with children only at undecided steps; a decided step must have no children. Record: `{"v":1,"op","hash","root_a","root_b","root_c","A","B","D","steps"}`.
 

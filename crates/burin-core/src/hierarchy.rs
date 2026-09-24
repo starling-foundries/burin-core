@@ -23,10 +23,14 @@ pub struct Hierarchy {
 /// rHEALPix with `N_side = 3`: aperture 9 over six base cells.
 pub const SPACE: Hierarchy = Hierarchy { a: 9, b: 6 };
 
+/// The largest aperture (`N_side = 64`). It bounds what a record can make a verifier hash to build
+/// its ladders, whatever the record claims, and keeps `A + B` within a u32.
+pub const MAX_APERTURE: u32 = 4096;
+
 impl Hierarchy {
     pub fn new(a: u32, b: u32) -> Result<Hierarchy> {
-        if a < 2 || b < 1 {
-            return invalid(format!("need A >= 2 and B >= 1, got A={a}, B={b}"));
+        if !(2..=MAX_APERTURE).contains(&a) || b < 1 {
+            return invalid(format!("need 2 <= A <= {MAX_APERTURE} and B >= 1, got A={a}, B={b}"));
         }
         if b > a * (a - 1) {
             return invalid(format!("B={b} > A(A-1)={}: the leading block would not be two digits", a * (a - 1)));
@@ -58,7 +62,10 @@ impl Hierarchy {
     /// The deepest level whose cids, and the leaf ranges of a tree that deep, fit in 64 bits:
     /// the largest `r` with `(A + B)·A^r <= u64::MAX` (18 for rHEALPix).
     pub fn max_level(&self) -> u32 {
-        let (mut r, mut top) = (0u32, (self.a + self.b) as u64);
+        if self.a < 2 {
+            return 0;
+        }
+        let (mut r, mut top) = (0u32, self.a as u64 + self.b as u64);
         while let Some(next) = top.checked_mul(self.a as u64) {
             top = next;
             r += 1;
@@ -125,15 +132,20 @@ impl Hierarchy {
         cid * span..(cid + 1) * span
     }
 
-    /// Validate a cid (well-formed leading block, level bound); returns its level.
+    /// Validate a cid (well-formed leading block, no deeper than `max_level` nor the deepest
+    /// level); returns its level. Some cids of the level below the deepest fit in 64 bits, but
+    /// that level is not whole, so it is not a level.
     pub fn check(&self, cid: Cid, max_level: Option<u32>) -> Result<u32> {
         if cid < self.a as u64 {
             return invalid(format!("not a cid: {cid}"));
         }
         let r = self.level(cid);
         let lead = cid / (self.a as u64).pow(r);
-        if !(self.a as u64 <= lead && lead < (self.a + self.b) as u64) {
+        if !(self.a as u64 <= lead && lead < self.a as u64 + self.b as u64) {
             return invalid(format!("cid {cid} names base {}, outside [0, {})", lead as i64 - self.a as i64, self.b));
+        }
+        if r > self.max_level() {
+            return invalid(format!("cid {cid} is at level {r}, deeper than the deepest level, {}", self.max_level()));
         }
         if let Some(m) = max_level {
             if r > m {

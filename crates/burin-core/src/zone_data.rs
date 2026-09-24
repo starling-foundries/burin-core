@@ -126,7 +126,8 @@ pub fn from_dggs_json(doc: &Value, profile: &Profile, field: Option<&str>, depth
         labelled.push((d.to_string(), e));
     }
     let entry = pick("depth", labelled, depth.map(|d| d.to_string()))?;
-    let k = depth_of(entry).expect("labelled above") as u32;
+    let k = depth_of(entry).expect("labelled above");
+    let k = u32::try_from(k).map_err(|_| crate::Error::Invalid(format!("depth {k} has too many sub-zones")))?;
     let count = count_at(k)?;
     let shape = entry.get("shape");
     let shape_n = |key: &str| shape.and_then(|s| s.get(key)).and_then(Value::as_u64);
@@ -148,6 +149,9 @@ pub fn from_dggs_json(doc: &Value, profile: &Profile, field: Option<&str>, depth
     }
     let pz = position(&SPACE, zone)?;
     let d = pz.level + k;
+    if d > SPACE.max_level() {
+        return invalid(format!("depth {k} below a level-{} zone is deeper than the deepest level, {}", pz.level, SPACE.max_level()));
+    }
     let ctx = Arc::new(profile.ctx(d)?);
     let n = side(&SPACE)?;
     let width = n.pow(k);

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/burin-core", "crates/burin-py"]
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.2.0"

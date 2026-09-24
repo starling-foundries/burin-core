@@ -26,6 +26,19 @@ jobs:
       - if: matrix.os == 'ubuntu-latest'
         run: cargo check -p burin-core --target wasm32-unknown-unknown
 
+  fuzz:
+    # a short run of every target from the committed seeds; a longer one is a local job
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - working-directory: fuzz
+        run: |
+          for t in $(cargo fuzz list); do
+            cargo fuzz run "$t" "corpus/$t" "seeds/$t" -- -max_total_time=60 -max_len=65536 -timeout=10 -rss_limit_mb=2048
+          done
+
   python:
     runs-on: ${{ matrix.os }}
     strategy:

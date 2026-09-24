@@ -242,3 +242,16 @@ fn a_non_square_aperture_has_no_rows() {
     let h = Hierarchy::new(8, 6).unwrap();
     assert!(position(&h, h.cid(&[0, 1]).unwrap()).is_err());
 }
+
+#[test]
+fn ids_below_the_deepest_level_are_not_cells() {
+    // 9^20 is a level-19 id that fits in 64 bits; level 19 does not (15·9^19 > u64::MAX)
+    let deepest = SPACE.max_level();
+    let (last, below) = (15 * 9u64.pow(deepest) - 1, 9u64.pow(deepest + 2));
+    assert_eq!(position(&SPACE, last).unwrap().level, deepest);
+    neighbours(&Profile::ogc(), last).unwrap();
+    assert!(position(&SPACE, below).is_err());
+    assert!(neighbours(&Profile::ogc(), below).is_err());
+    assert!(SPACE.path(below).is_err());
+    assert!(cid_to_suid(below).is_err());
+}

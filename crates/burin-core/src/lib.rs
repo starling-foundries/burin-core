@@ -18,7 +18,7 @@ pub mod zone_data;
 
 pub use error::{Error, Result};
 pub use hash::{Ctx, Digest, Hasher, Ladders, Sha256Tagged};
-pub use hierarchy::{cid_to_suid, suid_to_cid, Cid, Hierarchy, SPACE};
+pub use hierarchy::{cid_to_suid, suid_to_cid, Cid, Hierarchy, MAX_APERTURE, SPACE};
 pub use index::{Hit, Index, Relation};
 pub use opening::{open_path, verify_opening, Claim, Entry, Opening, OpeningRecord};
 pub use polyfill::{cover, cover_nodes, fingerprint_geojson, fingerprint_polygon, geometry_from_geojson, polyfill, MAX_RESOLUTION};

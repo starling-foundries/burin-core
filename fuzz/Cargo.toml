@@ -1,0 +1,55 @@
+[package]
+name = "burin-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+burin-core = { path = "../crates/burin-core" }
+
+# Its own workspace, so the nightly-only build never touches the main one.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "opening_record"
+path = "fuzz_targets/opening_record.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "setop_proof"
+path = "fuzz_targets/setop_proof.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dggs_json"
+path = "fuzz_targets/dggs_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "geojson"
+path = "fuzz_targets/geojson.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cell_ids"
+path = "fuzz_targets/cell_ids.rs"
+test = false
+doc = false
+bench = false

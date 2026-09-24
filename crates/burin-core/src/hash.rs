@@ -111,7 +111,11 @@ pub fn hex(d: &Digest) -> String {
     ::hex::encode(d)
 }
 
+/// 64 lowercase hex digits, as `hex` writes them: a digest has one spelling on the wire.
 pub fn unhex(s: &str) -> Option<Digest> {
+    if s.bytes().any(|c| c.is_ascii_uppercase()) {
+        return None;
+    }
     let v = ::hex::decode(s).ok()?;
     v.try_into().ok()
 }

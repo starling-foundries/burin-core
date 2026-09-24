@@ -3,8 +3,9 @@
 //! An opening is a tree of steps. A step is either a claim ("this node is constant: empty or
 //! full") or `entries`: A child entries (B at the root level), each a bare hash or a nested
 //! opening. The verifier recomputes hashes bottom-up and compares with the committed root. The
-//! cell a proof speaks about is the sequence of opened positions, so it is structural and cannot
-//! be relabelled.
+//! cell a proof speaks about is the sequence of opened positions, so it is structural: a proof
+//! moved to another position verifies only where its claim is also true, as between the identical
+//! children of a constant node.
 //!
 //! Wire form: `{"claim": "full" | "empty"}` or `{"entries": [hex | opening, ...]}`, wrapped in
 //! `{"v": 1, "hash": id, "A": a, "B": b, "D": d, "root": hex, "opening": {...}}`.
@@ -226,6 +227,26 @@ pub struct OpeningRecord {
 
 pub const OPENING_WIRE_VERSION: u64 = 1;
 
+/// A record's `A`, `B` and `D`: a hierarchy (SPEC §2) and a depth no deeper than its deepest level.
+/// A number that does not fit is refused, never truncated, so each field has one spelling.
+pub(crate) fn wire_shape(v: &Value) -> Result<(u32, u32, u32)> {
+    let num = |k: &str| -> Result<u32> {
+        let n = v.get(k).and_then(Value::as_u64).ok_or_else(|| crate::Error::Invalid(format!("missing {k}")))?;
+        u32::try_from(n).map_err(|_| crate::Error::Invalid(format!("{k} = {n} is out of range")))
+    };
+    let (a, b, d) = (num("A")?, num("B")?, num("D")?);
+    let h = crate::hierarchy::Hierarchy::new(a, b)?;
+    if d > h.max_level() {
+        return invalid(format!("D = {d} is deeper than the deepest level, {}", h.max_level()));
+    }
+    Ok((a, b, d))
+}
+
+/// Whether a record's shape is one `wire_shape` accepts.
+pub(crate) fn valid_shape(a: u32, b: u32, d: u32) -> bool {
+    crate::hierarchy::Hierarchy::new(a, b).is_ok_and(|h| d <= h.max_level())
+}
+
 impl OpeningRecord {
     pub fn new(tree: &Tree, opening: Opening) -> OpeningRecord {
         OpeningRecord { hash: tree.ctx.hasher.id().to_string(), a: tree.h.a, b: tree.h.b, d: tree.d, root: tree.root(), opening }
@@ -249,13 +270,13 @@ impl OpeningRecord {
         if ver != OPENING_WIRE_VERSION {
             return invalid(format!("opening record is version v{ver}; this build reads v{OPENING_WIRE_VERSION}"));
         }
-        let num = |k: &str| v.get(k).and_then(Value::as_u64).ok_or_else(|| crate::Error::Invalid(format!("missing {k}")));
+        let (a, b, d) = wire_shape(v)?;
         let root = v.get("root").and_then(Value::as_str).and_then(unhex).ok_or_else(|| crate::Error::Invalid("bad root".into()))?;
         Ok(OpeningRecord {
             hash: v.get("hash").and_then(Value::as_str).unwrap_or("").to_string(),
-            a: num("A")? as u32,
-            b: num("B")? as u32,
-            d: num("D")? as u32,
+            a,
+            b,
+            d,
             root,
             opening: Opening::from_json(v.get("opening").ok_or_else(|| crate::Error::Invalid("missing opening".into()))?)?,
         })
@@ -267,7 +288,7 @@ impl OpeningRecord {
             Some(h) => h,
             None => return false,
         };
-        if self.a < 2 || self.b < 1 || self.d > 64 {
+        if !valid_shape(self.a, self.b, self.d) {
             return false;
         }
         let ctx = Ctx::new(h, self.a, self.b, self.d);

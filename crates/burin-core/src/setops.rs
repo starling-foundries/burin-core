@@ -239,7 +239,7 @@ impl SetOpProof {
             Some(h) => h,
             None => return false,
         };
-        if self.a < 2 || self.b < 1 || self.d > 64 || self.steps.len() != self.b as usize {
+        if !crate::opening::valid_shape(self.a, self.b, self.d) || self.steps.len() != self.b as usize {
             return false;
         }
         let ctx = Ctx::new(h, self.a, self.b, self.d);
@@ -280,7 +280,7 @@ impl SetOpProof {
         }
         let op = v.get("op").and_then(Value::as_str).and_then(Op::parse).ok_or_else(|| crate::Error::Invalid("bad op".into()))?;
         let h = |k: &str| v.get(k).and_then(Value::as_str).and_then(unhex).ok_or_else(|| crate::Error::Invalid(format!("bad {k}")));
-        let num = |k: &str| v.get(k).and_then(Value::as_u64).ok_or_else(|| crate::Error::Invalid(format!("missing {k}")));
+        let (a, b, d) = crate::opening::wire_shape(v)?;
         let steps = match v.get("steps") {
             Some(Value::Array(ss)) => ss.iter().map(Step::from_json).collect::<Result<Vec<_>>>()?,
             _ => return invalid("missing steps"),
@@ -291,9 +291,9 @@ impl SetOpProof {
             root_a: h("root_a")?,
             root_b: h("root_b")?,
             root_c: h("root_c")?,
-            a: num("A")? as u32,
-            b: num("B")? as u32,
-            d: num("D")? as u32,
+            a,
+            b,
+            d,
             steps,
         })
     }
