@@ -315,3 +315,84 @@ pub fn prove(a: &Tree, b: &Tree, op: Op) -> Result<SetOpProof> {
     let root_c = ctx.hasher.root(&steps.iter().map(|s| s.c).collect::<Vec<_>>());
     Ok(SetOpProof { op, hash: ctx.hasher.id().to_string(), root_a: a.root(), root_b: b.root(), root_c, a: a.h.a, b: a.h.b, d: a.d, steps })
 }
+
+/// The set relations of SPEC §12, the same for space, time and space-time sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SetRelation {
+    Equals,
+    Disjoint,
+    Intersects,
+    Within,
+    Contains,
+}
+
+impl SetRelation {
+    pub const ALL: [SetRelation; 5] = [SetRelation::Equals, SetRelation::Disjoint, SetRelation::Intersects, SetRelation::Within, SetRelation::Contains];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            SetRelation::Equals => "equals",
+            SetRelation::Disjoint => "disjoint",
+            SetRelation::Intersects => "intersects",
+            SetRelation::Within => "within",
+            SetRelation::Contains => "contains",
+        }
+    }
+    pub fn parse(s: &str) -> Option<SetRelation> {
+        SetRelation::ALL.into_iter().find(|r| r.name() == s)
+    }
+}
+
+/// The root of the empty tree a context and depth describe.
+pub fn empty_root(ctx: &Ctx, d: u32) -> Digest {
+    ctx.hasher.root(&vec![ctx.ladders.empty(d); ctx.b as usize])
+}
+
+/// Whether `rel` holds between `x` and `y`.
+pub fn holds(x: &Tree, y: &Tree, rel: SetRelation) -> Result<bool> {
+    compatible(x, y)?;
+    Ok(match rel {
+        SetRelation::Equals => x.root() == y.root(),
+        SetRelation::Disjoint => disjoint(x, y)?,
+        SetRelation::Intersects => intersects(x, y)?,
+        SetRelation::Within => contains(y, x)?,
+        SetRelation::Contains => contains(x, y)?,
+    })
+}
+
+/// The transcript that decides `rel` between `x` and `y`, whether or not it holds; `None` for
+/// `Equals`, which the roots decide alone.
+pub fn relation_transcript(x: &Tree, y: &Tree, rel: SetRelation) -> Result<Option<SetOpProof>> {
+    compatible(x, y)?;
+    Ok(match rel {
+        SetRelation::Equals => None,
+        SetRelation::Disjoint | SetRelation::Intersects => Some(prove(x, y, Op::Intersect)?),
+        SetRelation::Within => Some(prove(x, y, Op::Difference)?),
+        SetRelation::Contains => Some(prove(y, x, Op::Difference)?),
+    })
+}
+
+/// Whether the evidence shows `rel` holds between the sets whose roots are `x` and `y`. Stateless;
+/// `false` on any defect, including evidence about other roots or another operation.
+pub fn verify_relation(rel: SetRelation, x: &Digest, y: &Digest, proof: Option<&SetOpProof>) -> bool {
+    let p = match (rel, proof) {
+        (SetRelation::Equals, None) => return x == y,
+        (SetRelation::Equals, Some(_)) | (_, None) => return false,
+        (_, Some(p)) => p,
+    };
+    let (op, a, b) = match rel {
+        SetRelation::Disjoint | SetRelation::Intersects => (Op::Intersect, x, y),
+        SetRelation::Within => (Op::Difference, x, y),
+        SetRelation::Contains => (Op::Difference, y, x),
+        SetRelation::Equals => unreachable!("handled above"),
+    };
+    if p.op != op || p.root_a != *a || p.root_b != *b || !p.verify() {
+        return false;
+    }
+    let h = crate::hash::hasher_for(&p.hash).expect("verified");
+    let empty = empty_root(&Ctx::new(h, p.a, p.b, p.d), p.d);
+    match rel {
+        SetRelation::Intersects => p.root_c != empty,
+        _ => p.root_c == empty,
+    }
+}

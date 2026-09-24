@@ -53,3 +53,10 @@ path = "fuzz_targets/cell_ids.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "time"
+path = "fuzz_targets/time.rs"
+test = false
+doc = false
+bench = false

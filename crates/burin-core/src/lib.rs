@@ -1,7 +1,8 @@
 //! A deterministic, equal-area coverage commitment: polygon → rHEALPix cells → canonical cell
 //! set → 32-byte root, with openings (membership / non-membership), set algebra over roots, and a
 //! profile that binds every parameter the identifier is read against; and the zone topology
-//! (scanline sub-zone order, edge neighbours, rasters) that never changes a root.
+//! (scanline sub-zone order, edge neighbours, rasters) that never changes a root. Time has the same
+//! program on the dyadic hierarchy of `time`.
 
 pub mod error;
 pub mod geo;
@@ -12,6 +13,7 @@ pub mod opening;
 pub mod polyfill;
 pub mod profile;
 pub mod setops;
+pub mod time;
 pub mod tree;
 pub mod zone;
 pub mod zone_data;
@@ -23,7 +25,8 @@ pub use index::{Hit, Index, Relation};
 pub use opening::{open_path, verify_opening, Claim, Entry, Opening, OpeningRecord};
 pub use polyfill::{cover, cover_nodes, fingerprint_geojson, fingerprint_polygon, geometry_from_geojson, polyfill, MAX_RESOLUTION};
 pub use profile::{Profile, BURIN_1, OGC_RHEALPIX};
-pub use setops::{difference, divergence, intersect, merge, prove, union, Op, SetOpProof};
+pub use setops::{difference, divergence, holds, intersect, merge, prove, relation_transcript, union, verify_relation, Op, SetOpProof, SetRelation};
+pub use time::{allen, interval_cells, Allen, TIME, TIME_DEPTH};
 pub use tree::{Node, Tree};
 pub use zone_data::{dggrs_uri, from_dggs_json, to_dggs_json, Presence, RHEALPIX_DGGRS};
 pub use zone::{cell_at, halo_index, neighbours, position, raster_cells, raster_index, subzone_at, subzone_index, subzones, Direction, Position, DIRECTIONS};

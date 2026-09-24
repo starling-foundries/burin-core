@@ -135,6 +135,25 @@ fn no_edit_of_a_set_operation_proof_verifies() {
 }
 
 #[test]
+fn no_edit_of_a_time_record_verifies() {
+    use burin_core::time::{self, EPOCH_TICK};
+    let ctx = Arc::new(time::ctx(&Profile::ogc()).unwrap());
+    let day = 86_400_000_000;
+    let a = time::intervals_tree(&[(EPOCH_TICK, EPOCH_TICK + day), (EPOCH_TICK + 3 * day, EPOCH_TICK + 5 * day)], ctx.clone()).unwrap();
+    let b = time::intervals_tree(&[(EPOCH_TICK + day / 2, EPOCH_TICK + 4 * day)], ctx).unwrap();
+    let mut n = 0;
+    for tick in [EPOCH_TICK + 7, EPOCH_TICK + 2 * day, EPOCH_TICK + 4 * day + 1] {
+        let op = open_path(&a, time::tick_cell(tick).unwrap()).unwrap().unwrap();
+        let own = |r: &OpeningRecord| r.cid().and_then(|c| open_path(&a, c).unwrap()).is_some_and(|o| OpeningRecord::new(&a, o) == *r);
+        n += check_all(OpeningRecord::new(&a, op).to_json(), OpeningRecord::from_json, OpeningRecord::verify, own);
+    }
+    let p = prove(&a, &b, Op::Difference).unwrap();
+    let same = |r: &SetOpProof| (r.op, r.root_a, r.root_b, r.root_c) == (p.op, p.root_a, p.root_b, p.root_c);
+    n += check_all(p.to_json(), SetOpProof::from_json, SetOpProof::verify, same);
+    assert!(n > 2000, "only {n} mutants");
+}
+
+#[test]
 fn record_sizes_are_read_exactly_or_refused() {
     let t = tree(2, &["Q4"]);
     let rec = OpeningRecord::new(&t, open_path(&t, suid_to_cid("Q41").unwrap()).unwrap().unwrap()).to_json();

@@ -67,4 +67,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv run --with rhealpixdggs==0.8.6 --with shapely python tools/gen_fixtures.py
+      - run: python3 tools/gen_time_fixtures.py
       - run: git diff --exit-code -- crates/burin-core/tests/fixtures
