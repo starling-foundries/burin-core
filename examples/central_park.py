@@ -66,7 +66,7 @@ for name, where, when in photos:
     is_open = open_.check_instant(time_proof, when)
     size = len(json.dumps(place_proof.to_json())) + len(json.dumps(time_proof.to_json()))
     print(f"  {name:28} in the park: {'yes' if in_park else 'no ':3}   open: {'yes' if is_open else 'no ':3}"
-          f"   → {'yes' if in_park and is_open else 'no'}   ({size:,} bytes of proof)")
+          f"   so: {'yes' if in_park and is_open else 'no'}   ({size:,} bytes of proof)")
 
 
 print("\nTRYING TO CHEAT")
@@ -76,7 +76,7 @@ place_proof, time_proof = proofs[name]
 
 def attempt(label, check):
     try:
-        print(f"  {label:44} answered {check()}  ← this should never happen")
+        print(f"  {label:44} answered {check()}  (this should never happen)")
     except burin.InvalidProof as refused:
         print(f"  {label:44} refused: {refused}")
 
