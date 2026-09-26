@@ -5,7 +5,7 @@ use burin_core::index::Index as CoreIndex;
 use burin_core::opening::{open_path, Claim, OpeningRecord};
 use burin_core::polyfill as pf;
 use burin_core::profile::Profile as CoreProfile;
-use burin_core::setops::{self, Op, SetOpProof, SetRelation};
+use burin_core::setops::{self, Op, SetOpProof};
 use burin_core::time as core_time;
 use burin_core::tree::Tree as CoreTree;
 use burin_core::zone;
@@ -16,15 +16,15 @@ use pyo3::types::{PyBytes, PyDict, PyList};
 use serde_json::Value;
 use std::sync::Arc;
 
+mod fingerprint;
 mod time;
 mod vector;
+
+use fingerprint::relation;
 
 /// The most cells or leaves one call lists (2 GiB of ids).
 const MAX_LISTED: u64 = 1 << 28;
 
-fn relation(name: &str) -> PyResult<SetRelation> {
-    SetRelation::parse(name).ok_or_else(|| PyValueError::new_err(format!("unknown relation {name:?}; one of equals, disjoint, intersects, within, contains")))
-}
 
 fn err(e: burin_core::Error) -> PyErr {
     PyValueError::new_err(e.to_string())
@@ -321,6 +321,46 @@ impl Tree {
         from_json(py, &setops::prove(&self.inner, &other.inner, op).map_err(err)?.to_json())
     }
 
+    /// The fingerprint to publish: this tree's root with the profile, axis and depth it is read against.
+    #[getter]
+    fn fingerprint(&self) -> PyResult<fingerprint::Fingerprint> {
+        fingerprint::fingerprint_of(&self.inner, &self.profile)
+    }
+
+    /// A proof of whether the cell `cid` is in this set, for `Fingerprint.check_cell`.
+    /// `ValueError` for a cell only partly covered: ask about a smaller cell.
+    fn prove_cell(&self, cid: u64) -> PyResult<fingerprint::Proof> {
+        match open_path(&self.inner, cid).map_err(err)? {
+            Some(op) => Ok(fingerprint::Proof { inner: OpeningRecord::new(&self.inner, op) }),
+            None => Err(PyValueError::new_err(format!("cell {cid} is partly covered; ask about a smaller cell"))),
+        }
+    }
+
+    /// A proof of whether the point `(lon, lat)` is in this spatial set, for `Fingerprint.check_point`.
+    fn prove_point(&self, lon: f64, lat: f64) -> PyResult<fingerprint::Proof> {
+        if self.inner.h == core_time::TIME {
+            return Err(PyValueError::new_err("a time tree has no points; prove an instant"));
+        }
+        self.prove_cell(zone::cell_from_point(&self.profile, lon, lat, self.inner.d).map_err(err)?)
+    }
+
+    /// A proof of whether `instant` (datetime64, ISO 8601 text or POSIX µs) is in this time set,
+    /// for `Fingerprint.check_instant`.
+    fn prove_instant(&self, instant: &Bound<'_, PyAny>) -> PyResult<fingerprint::Proof> {
+        if self.inner.h != core_time::TIME {
+            return Err(PyValueError::new_err("a spatial tree has no instants; prove a point"));
+        }
+        let tick = core_time::tick(&self.profile, fingerprint::posix_us(instant)?).map_err(err)?;
+        self.prove_cell(core_time::tick_cell(tick).map_err(err)?)
+    }
+
+    /// The transcript deciding `relation` between this set and `other`, for
+    /// `Fingerprint.check_relation`; `None` for `equals`.
+    fn prove_relation(&self, other: &Tree, relation: &str) -> PyResult<Option<fingerprint::Transcript>> {
+        let t = setops::relation_transcript(&self.inner, &other.inner, self::relation(relation)?).map_err(err)?;
+        Ok(t.map(|inner| fingerprint::Transcript { inner }))
+    }
+
     /// Whether `relation` (`equals`, `disjoint`, `intersects`, `within`, `contains`) holds
     /// between this set and `other`.
     fn holds(&self, other: &Tree, relation: &str) -> PyResult<bool> {
@@ -600,6 +640,10 @@ fn burin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Profile>()?;
     m.add_class::<Tree>()?;
     m.add_class::<Index>()?;
+    m.add_class::<fingerprint::Fingerprint>()?;
+    m.add_class::<fingerprint::Proof>()?;
+    m.add_class::<fingerprint::Transcript>()?;
+    m.add("InvalidProof", m.py().get_type::<fingerprint::InvalidProof>())?;
     m.add_function(wrap_pyfunction!(polyfill, m)?)?;
     m.add_function(wrap_pyfunction!(fingerprint_polygon, m)?)?;
     m.add_function(wrap_pyfunction!(verify_opening, m)?)?;
