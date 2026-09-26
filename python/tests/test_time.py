@@ -119,3 +119,16 @@ def test_time_and_space_trees_stay_apart():
             call()
     record = t.open(int(T.cells_from_times(np.datetime64("2013-07-15T08:00"))))
     assert burin.verify_opening(record)
+
+
+def test_an_opening_states_the_cell_it_is_about():
+    space = _space("Q4")
+    for suid, covered in (("Q41", True), ("Q418", True), ("N000", False)):
+        record = space.open(burin.suid_to_cid(suid))
+        assert burin.opening_statement(record) == (burin.suid_to_cid(suid), covered)
+    hours = T.tree([("2013-07-15T10:00", "2013-07-15T18:00")])
+    for moment, covered in (("2013-07-15T12:00", True), ("2013-07-15T20:00", False)):
+        cell = int(T.cells_from_times(np.datetime64(moment)))
+        assert burin.opening_statement(hours.open(cell)) == (cell, covered)
+    with pytest.raises(ValueError):
+        burin.opening_statement({"v": 1})

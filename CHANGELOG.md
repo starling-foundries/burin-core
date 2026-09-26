@@ -25,6 +25,9 @@ No wire output changed. Time is new.
   roots alone (`relation_transcript`, `verify_relation`, `Tree.holds`, `Tree.relation_evidence`).
 - **Testing:** `time.json`, a conformance fixture computed from the specification's text by an
   independent reference (`tools/gen_time_fixtures.py`), plus a time fuzz target.
+- `burin.opening_statement(record)`: the cell an opening speaks about and whether it is covered,
+  so a verifier can check a proof is about the cell it asked about.
+- `examples/central_park.py`: space and time end to end.
 - `SPEC-time.md`, the draft of the space-time tree, zone data with time and the signed record.
 
 ### Changed

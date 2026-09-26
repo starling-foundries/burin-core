@@ -2,7 +2,7 @@
 
 use burin_core::hierarchy::{cid_to_suid as core_cid_to_suid, suid_to_cid as core_suid_to_cid, Cid};
 use burin_core::index::Index as CoreIndex;
-use burin_core::opening::{open_path, OpeningRecord};
+use burin_core::opening::{open_path, Claim, OpeningRecord};
 use burin_core::polyfill as pf;
 use burin_core::profile::Profile as CoreProfile;
 use burin_core::setops::{self, Op, SetOpProof, SetRelation};
@@ -436,6 +436,18 @@ fn verify_opening(record: &Bound<'_, PyAny>) -> PyResult<bool> {
     Ok(OpeningRecord::from_json(&v).map(|r| r.verify()).unwrap_or(false))
 }
 
+/// What a single-path opening record speaks about: `(cid, covered)`. A verifier checks the record
+/// with `verify_opening`, compares its `root` with the fingerprint it trusts, and compares the cid
+/// with the cell it asked about; a valid proof about another cell proves nothing about this one.
+#[pyfunction]
+fn opening_statement(record: &Bound<'_, PyAny>) -> PyResult<(Cid, bool)> {
+    let r = OpeningRecord::from_json(&to_json(record)?).map_err(err)?;
+    match (r.cid(), r.opening.terminal()) {
+        (Some(cid), Some(claim)) => Ok((cid, claim == Claim::Full)),
+        _ => Err(PyValueError::new_err("the record does not open exactly one cell")),
+    }
+}
+
 /// Verify a set-operation transcript (as returned by `Tree.prove`).
 #[pyfunction]
 fn verify_setop(proof: &Bound<'_, PyAny>) -> PyResult<bool> {
@@ -593,6 +605,7 @@ fn burin(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_opening, m)?)?;
     m.add_function(wrap_pyfunction!(verify_setop, m)?)?;
     m.add_function(wrap_pyfunction!(verify_relation, m)?)?;
+    m.add_function(wrap_pyfunction!(opening_statement, m)?)?;
     m.add_function(wrap_pyfunction!(time::ticks, m)?)?;
     m.add_function(wrap_pyfunction!(time::tick_starts, m)?)?;
     m.add_function(wrap_pyfunction!(time::interval_cells, m)?)?;
