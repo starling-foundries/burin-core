@@ -3,7 +3,7 @@
 What counts as a wire output, and what may change between releases, is set out in
 [STABILITY.md](STABILITY.md).
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-09-26)
 
 No wire output changed. Time is new.
 
