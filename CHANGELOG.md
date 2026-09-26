@@ -25,8 +25,18 @@ No wire output changed. Time is new.
   roots alone (`relation_transcript`, `verify_relation`, `Tree.holds`, `Tree.relation_evidence`).
 - **Testing:** `time.json`, a conformance fixture computed from the specification's text by an
   independent reference (`tools/gen_time_fixtures.py`), plus a time fuzz target.
-- `burin.opening_statement(record)`: the cell an opening speaks about and whether it is covered,
-  so a verifier can check a proof is about the cell it asked about.
+- **Fingerprints and one-call checks** (SPEC §5):
+  - `Fingerprint` binds a root to its profile, axis and depth, and is published as text such as
+    `burin:ogc-rhealpix:space:11:<root>`;
+  - `Fingerprint.check_point`, `check_instant`, `check_cell` and `check_relation` answer the
+    question asked, or raise `InvalidProof` (a `ValueError`) with the reason;
+  - `Tree.fingerprint`, `prove_point`, `prove_instant`, `prove_cell` and `prove_relation` make the
+    evidence, as `Proof` and `Transcript` objects;
+  - in Rust, `fingerprint::Fingerprint` and `Error::InvalidProof`.
+- `burin.opening_statement(record)`: the cell an opening speaks about and whether it is covered.
+  Together with `verify_opening`, `verify_setop` and `verify_relation` it is a building block; the
+  checks above are the verification to use.
+- `THREAT_MODEL.md` and `SECURITY.md`.
 - `examples/central_park.py`: space and time end to end.
 - `SPEC-time.md`, the draft of the space-time tree, zone data with time and the signed record.
 

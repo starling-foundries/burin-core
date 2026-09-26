@@ -61,6 +61,25 @@ Each field has one spelling. Digests are 64 **lowercase** hex digits. `A`, `B` a
 
 Set operations combine two trees of the same profile and depth by node-local rules on hashes (`FULL ∪ X = FULL`, `EMPTY ∪ X = X`; `EMPTY ∩ X = EMPTY`, `FULL ∩ X = X`; `EMPTY \ X = EMPTY`, `X \ FULL = EMPTY`, `X \ EMPTY = X`; equal hashes ⇒ equal sets, `X \ X = EMPTY`), descending only where both are partial and different. A **transcript** records `(h_a, h_b, h_c)` per step with children only at undecided steps; a decided step must have no children. Record: `{"v":1,"op","hash","root_a","root_b","root_c","A","B","D","steps"}`.
 
+**Fingerprints.** A root is published with what it is read against, as one line of text:
+
+```
+burin:<profile>:space:<depth>:<root>          burin:ogc-rhealpix:space:11:f0a5…
+burin:<profile>:time:<root>                   burin:ogc-rhealpix:time:0e85…     (depth 61, §10)
+```
+
+`<profile>` is `ogc-rhealpix` or `burin-1` (§1, hash `sha256`), or otherwise the profile's 64-hex
+id, and a reader of an id must already hold the profile. `<depth>` is decimal with no sign or
+leading zero, and `<root>` is 64 lowercase hex digits. A text that does not re-spell to itself is
+refused.
+
+A **check** asks a fingerprint F whether a cell is in its set, and takes an opening record as
+evidence. It answers only if the record's hash, A, B and D are F's, its root is F's root, it
+verifies, and the cell it opens is the cell asked about. Otherwise the record proves nothing about
+the question, and the check says so rather than answering. A point is asked as its cell on F's
+grid at F's depth (§8), and an instant as its tick (§9). A relation (§12) is asked of two
+fingerprints of the same profile, axis and depth, with the transcript §12 names as evidence.
+
 ## 6. Numerics that must be reproduced
 
 The projection is the rHEALPix projection of the WGS84 authalic sphere as in rhealpixdggs-py 0.8.6, including: the authalic-latitude series (arXiv 2212.05818 A19/A20) with its evaluation order; the polar cap clamp; the pole convention `lon = −π`; the polar-triangle tie-breaks with ε = 10⁻¹⁵ and their north/south comparison senses; `lon_0` applied as a degree shift outside the projection with wrap to `[−180, 180)`. The fixtures pin every one of these.

@@ -21,6 +21,24 @@ parity by the fixtures under `crates/burin-core/tests/fixtures`.
 
 ## Python
 
+Publish a fingerprint; answer questions against it with a proof:
+
+```python
+import burin
+
+park = burin.Tree.from_geojson(outline, 11)         # a place, as equal-area cells about 50 m across
+print(park.fingerprint)                             # burin:ogc-rhealpix:space:11:f0a5… — publish this line
+
+proof = park.prove_point(lon, lat)                  # made by whoever holds the set
+fp = burin.Fingerprint.parse(published_line)        # held by whoever checks
+fp.check_point(proof, lon, lat)                     # True / False, or raises burin.InvalidProof
+```
+
+`examples/central_park.py` does this for a place and its opening hours together. What a check
+establishes, and what it does not, is in [THREAT_MODEL.md](THREAT_MODEL.md).
+
+The rest of the interface:
+
 ```python
 import burin as bc
 
