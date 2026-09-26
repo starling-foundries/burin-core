@@ -5,6 +5,7 @@
 //! program on the dyadic hierarchy of `time`.
 
 pub mod error;
+pub mod fingerprint;
 pub mod geo;
 pub mod hash;
 pub mod hierarchy;
@@ -19,6 +20,7 @@ pub mod zone;
 pub mod zone_data;
 
 pub use error::{Error, Result};
+pub use fingerprint::{Axis, Fingerprint};
 pub use hash::{Ctx, Digest, Hasher, Ladders, Sha256Tagged};
 pub use hierarchy::{cid_to_suid, suid_to_cid, Cid, Hierarchy, MAX_APERTURE, SPACE};
 pub use index::{Hit, Index, Relation};

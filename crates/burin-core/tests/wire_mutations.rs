@@ -135,6 +135,29 @@ fn no_edit_of_a_set_operation_proof_verifies() {
 }
 
 #[test]
+fn no_edit_of_a_proof_makes_a_check_answer_wrongly() {
+    use burin_core::fingerprint::Fingerprint;
+    let p = Profile::ogc();
+    let t = tree(3, &["Q4", "Q51", "N000", "S8"]);
+    let fp = Fingerprint::of(&t, &p).unwrap();
+    let mut n = 0;
+    for cell in ["Q412", "Q518", "N000", "P000"] {
+        let cid = suid_to_cid(cell).unwrap();
+        let original = OpeningRecord::new(&t, open_path(&t, cid).unwrap().unwrap());
+        let answer = fp.check_cell(&original, cid).unwrap();
+        for m in mutants(&original.to_json()) {
+            n += 1;
+            if let Ok(r) = OpeningRecord::from_json(&m) {
+                if let Ok(a) = fp.check_cell(&r, cid) {
+                    assert_eq!(a, answer, "an edit changed the answer about {cell}:\n{m}");
+                }
+            }
+        }
+    }
+    assert!(n > 2000, "only {n} mutants");
+}
+
+#[test]
 fn no_edit_of_a_time_record_verifies() {
     use burin_core::time::{self, EPOCH_TICK};
     let ctx = Arc::new(time::ctx(&Profile::ogc()).unwrap());

@@ -60,3 +60,10 @@ path = "fuzz_targets/time.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fingerprint"
+path = "fuzz_targets/fingerprint.rs"
+test = false
+doc = false
+bench = false
